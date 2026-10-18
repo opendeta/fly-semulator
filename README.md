@@ -59,7 +59,12 @@ bash scripts/fetch_data.sh          # ~535 MB, no login needed
 cd scripts && python3 webapp.py     # prints a login, serves http://127.0.0.1:8000
 ```
 
-Then open `http://127.0.0.1:8000` and log in with the credentials printed on start.
+Then open `http://127.0.0.1:8000` — you get a **login page** (cookie session).
+The password is printed on start; the server also prints a **one-click key** so you can
+open `http://127.0.0.1:8000/?k=<key>` and skip typing.
+
+> HTTP Basic auth was replaced by a cookie login because many browsers and in-app
+> viewers strip `Authorization` headers (they showed "Unauthorized").
 
 To expose it to the internet with a temporary public HTTPS URL:
 

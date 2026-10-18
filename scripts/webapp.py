@@ -5,7 +5,7 @@ import os
 import secrets
 import threading
 import time
-from flask import Flask, Response, request, jsonify, send_file
+from flask import Flask, Response, request, jsonify, send_file, redirect
 from world_sim import World
 from fly_render import render_frame
 from brain_panel import render_panel
@@ -16,6 +16,26 @@ print(f"[webapp] login: {USER} / {PW}", flush=True)
 open(os.environ.get("FLY_LOGIN_FILE", "fly_login.txt"), "w").write(f"{USER} {PW}\n")
 
 app = Flask(__name__)
+SESSION = secrets.token_hex(16)
+print(f"[webapp] one-click key: {SESSION}", flush=True)
+
+def _authed():
+    if request.cookies.get("fly_session") == SESSION:
+        return True
+    if request.args.get("k") == SESSION:
+        return True
+    a = request.authorization
+    return bool(a and a.username == USER and a.password == PW)
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        if (request.form.get("pw") or "") == PW:
+            r = redirect("/")
+            r.set_cookie("fly_session", SESSION, max_age=86400, httponly=True, samesite="Lax")
+            return r
+        return Response(LOGIN_HTML.replace("<!--ERR-->", "<p class=err>ভুল পাসওয়ার্ড / wrong password</p>"), 200)
+    return Response(LOGIN_HTML, 200)
 world = World()
 world.start_brain_thread()
 state = {"frame": None, "panel": None, "fps": 0.0}
@@ -48,9 +68,13 @@ threading.Thread(target=sim_loop, daemon=True).start()
 
 @app.before_request
 def auth():
-    a = request.authorization
-    if not (a and a.username == USER and a.password == PW):
-        return Response("401 Unauthorized", 401, {"WWW-Authenticate": 'Basic realm="fly"'})
+    if request.path in ("/login", "/favicon.ico"):
+        return None
+    if _authed():
+        return None
+    if request.path.startswith("/api/") or request.path.endswith((".mjpg", ".png")):
+        return Response("unauthorized", 401)
+    return redirect("/login")
 
 @app.route("/")
 def index():
@@ -84,6 +108,20 @@ def api_cmd():
     world.cmd(str(j.get("cmd", "")), j.get("val"))
     return jsonify(ok=True)
 
+LOGIN_HTML = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Login · FLY BRAIN LAB</title>
+<style>body{background:#0b0e17;color:#dfe6f2;font-family:system-ui,sans-serif;display:flex;
+align-items:center;justify-content:center;height:100vh;margin:0}
+.card{background:#141a28;border:1px solid #232c42;border-radius:14px;padding:28px 26px;text-align:center;min-width:270px}
+h1{font-size:19px;margin:0 0 6px} p{color:#8fa3c2;font-size:13px;margin:6px 0 16px}
+input{width:100%;padding:11px;border-radius:9px;border:1px solid #35476e;background:#0f1524;color:#dfe6f2;font-size:15px;box-sizing:border-box}
+button{margin-top:12px;width:100%;padding:11px;border-radius:9px;border:0;background:#2c3d61;color:#fff;font-size:15px;cursor:pointer}
+.err{color:#ff8080}</style></head><body><div class="card">
+<h1>🪰 FLY BRAIN LAB</h1><p>MaleCNS connectome · live simulation</p>
+<!--ERR--><form method="post" action="/login">
+<input type="password" name="pw" placeholder="password" autofocus autocomplete="current-password">
+<button type="submit">Enter →</button></form></div></body></html>"""
+
 HTML = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🦟 FLY BRAIN LAB</title><style>
@@ -100,7 +138,7 @@ input[type=range]{width:220px}
 <h1>🦟 FLY BRAIN LAB <span style="font-size:12px;color:#8fa3c2">
 — MaleCNS connectome (164,740 neurons) live on Omnara</span></h1>
 <div class="wrap">
- <div class="card"><img src="/video.mjpg" width="854" height="480" style="border-radius:8px">
+ <div class="card"><img id="vid" src="/video.mjpg" width="854" height="480" style="border-radius:8px">
   <div class="lab">REMOTE CONTROL</div>
   <div class="grid">
    <button onclick="cmd('light_left')">◀ light</button>
@@ -127,9 +165,15 @@ input[type=range]{width:220px}
  </div>
 </div>
 <script>
-function cmd(c,v){fetch('/api/cmd',{method:'POST',headers:{'Content-Type':'application/json'},
+document.getElementById('vid').src = '/video.mjpg' + (new URLSearchParams(location.search).get('k')
+  ? '?k=' + new URLSearchParams(location.search).get('k') : '');
+const KEY = new URLSearchParams(location.search).get('k') || '';
+const Q = KEY ? ('?k=' + KEY) : '';
+function cmd(c,v){fetch('/api/cmd'+Q,{method:'POST',headers:{'Content-Type':'application/json'},
  body:JSON.stringify({cmd:c,val:v===undefined?null:parseFloat(v)})})}
-function tick(){fetch('/api/state').then(r=>r.json()).then(s=>{
+function _old(c,v){fetch('/api/cmd',{method:'POST',headers:{'Content-Type':'application/json'},
+ body:JSON.stringify({cmd:c,val:v===undefined?null:parseFloat(v)})})}
+function tick(){fetch('/api/state'+Q).then(r=>r.json()).then(s=>{
  document.getElementById('st').innerHTML=
  `<tr><td>sim time</td><td>${s.t}s</td></tr>
   <tr><td>video</td><td>${s.fps} fps</td></tr>
@@ -142,7 +186,7 @@ function tick(){fetch('/api/state').then(r=>r.json()).then(s=>{
   <tr><td>DN L/R</td><td>${s.hz.dn_L} / ${s.hz.dn_R} Hz</td></tr>
   <tr><td>MOTOR</td><td>${s.hz.motor} Hz</td></tr>
   <tr><td>KC / DAN / MBON</td><td>${s.hz.kc} / ${s.hz.dan} / ${s.hz.mbon} Hz</td></tr>`});
- setTimeout(()=>{document.getElementById('panel').src='/brain.png?t='+Date.now()},0)}
+ setTimeout(()=>{document.getElementById('panel').src='/brain.png'+Q+'&t='+Date.now()},0)}
 tick();setInterval(tick,1500);setInterval(()=>tick(),1500);
 </script></body></html>"""
 
