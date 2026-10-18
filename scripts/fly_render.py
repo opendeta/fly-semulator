@@ -3,8 +3,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 try:
-    FONT_S = ImageFont.load_default(size=13)
-    FONT_B = ImageFont.load_default(size=17)
+    FONT_S = ImageFont.load_default(size=17)
+    FONT_B = ImageFont.load_default(size=22)
 except Exception:
     FONT_S = FONT_B = ImageFont.load_default()
 
@@ -52,7 +52,7 @@ def render_frame(world, W=854, H=480):
                          fly[1] + p[0]*sa + p[1]*ca,
                          fly[2] + p[2]])
 
-    cam = Cam(to_world([-17, 0, 10]), to_world([2, 0, 2.2]))
+    cam = Cam(to_world([-11.5, 0, 7.0]), to_world([1.0, 0, 2.6]))
     img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img, "RGBA")
 
@@ -133,12 +133,12 @@ def render_frame(world, W=854, H=480):
     lines = [
         "FLY BRAIN LAB  ·  MaleCNS connectome (164,740 neurons) · live",
         f"t={st.get('t',0)}s   speed={st.get('speed',0)} mm/s   dist-to-light={st.get('dist',0)} mm   caught={st.get('caught',0)}",
-        f"brain: {st.get('brain_x',0)}x real-time   turn={st.get('turn',0)} rad/s",
-        f"VIS {hz.get('vis_L',0)}/{hz.get('vis_R',0)} Hz   DN {hz.get('dn_L',0)}/{hz.get('dn_R',0)} Hz   MOTOR {hz.get('motor',0)} Hz",
+        f"brain {st.get('brain_x',0)}x real-time   VIS {hz.get('vis_L',0)}/{hz.get('vis_R',0)} Hz   "
+        f"DN {hz.get('dn_L',0)}/{hz.get('dn_R',0)} Hz   MOTOR {hz.get('motor',0)} Hz",
     ]
-    y = 10
+    y = 12
     for i, s in enumerate(lines):
-        d.text((12, y), s, font=FONT_B if i == 0 else FONT_S,
-               fill=(255, 230, 170) if i == 0 else (205, 215, 235))
-        y += 22
+        d.text((13, y), s, font=FONT_B if i == 0 else FONT_S,
+               fill=(255, 230, 170) if i == 0 else (210, 220, 238))
+        y += 27
     return img

@@ -92,6 +92,13 @@ cd scripts && python3 webapp.py
 * **remote control** — move the light (◀▶▲▼), on/off, auto-drift, pause, reset
 * **sliders** — innate phototaxis strength, brain steering gain, speed
 
+## Mobile / responsive
+
+The dashboard is mobile-first: single column under 760 px, 44 px tap targets, full-width
+sliders, no horizontal scrolling (verified with headless Chromium at 320, 360, 390, 414 and
+768 px wide — `scrollWidth == clientWidth` at every size). `scripts/mobile_check.py` reruns
+that check and writes screenshots.
+
 ## Files
 
 | file | role |
@@ -104,6 +111,7 @@ cd scripts && python3 webapp.py
 | `scripts/brain_panel.py` | live activity panel (matplotlib Agg) |
 | `scripts/webapp.py` | Flask dashboard: MJPEG + panel + control API |
 | `scripts/bench_loop.py` | loop benchmark (fps, brain real-time factor) |
+| `scripts/mobile_check.py` | Playwright responsive check + mobile screenshots |
 
 ## Honest limitations
 
