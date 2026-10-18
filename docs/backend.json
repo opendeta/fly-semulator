@@ -1,0 +1,6 @@
+{
+  "url": "https://remains-indicators-displaying-stephen.trycloudflare.com",
+  "view_key": "view-2b612492b255d468",
+  "updated": "2026-10-18T18:15:12Z",
+  "note": "Live compute backend (Omnara machine, MaleCNS LIF simulation). The URL changes when the tunnel restarts; the static site reads this file to find it."
+}

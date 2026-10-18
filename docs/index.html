@@ -1,0 +1,166 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🪰 FLY BRAIN LAB — live male fruit fly connectome</title>
+<style>
+:root{--bg:#0b0e17;--card:#141a28;--line:#232c42;--fg:#dfe6f2;--mut:#8fa3c2;--acc:#ffb347}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;padding:0 14px 40px}
+header{max-width:1180px;margin:0 auto;padding:26px 0 10px}
+h1{font-size:26px;margin:0}
+h2{font-size:16px;margin:0 0 8px;color:var(--acc)}
+p,li{color:var(--mut);font-size:14px;line-height:1.55}
+a{color:#7fd3ff}
+.wrap{max-width:1180px;margin:0 auto;display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+img.stream{width:100%;max-width:854px;border-radius:9px;display:block;background:#05070d}
+button{background:#22304d;color:var(--fg);border:1px solid #35476e;border-radius:8px;
+padding:8px 12px;margin:3px 3px 0 0;cursor:pointer;font-size:14px}
+button:hover{background:#2c3d61}button:disabled{opacity:.4;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-width:854px}
+table{font-size:13px;border-collapse:collapse;width:100%}
+td{padding:3px 8px;border-bottom:1px solid #1c2434}td:last-child{text-align:right;color:#fff}
+.lab{color:var(--mut);font-size:12px;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+input[type=text],input[type=password]{background:#0f1524;border:1px solid #35476e;color:var(--fg);
+border-radius:8px;padding:8px;font-size:13px;width:100%}
+input[type=range]{width:180px;vertical-align:middle}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#ff5252;margin-right:6px}
+.dot.on{background:#48e07a;box-shadow:0 0 8px #48e07a}
+.pill{display:inline-block;background:#1b2436;border:1px solid var(--line);border-radius:999px;
+padding:3px 10px;font-size:12px;color:var(--mut);margin:2px 4px 2px 0}
+.kv{display:flex;flex-wrap:wrap;gap:18px;margin-top:6px}
+.kv div{font-size:13px;color:var(--mut)}.kv b{display:block;color:#fff;font-size:19px}
+footer{max-width:1180px;margin:26px auto 0;color:#5f7characters}
+code{background:#0f1524;padding:2px 6px;border-radius:5px;font-size:12.5px;color:#cfe3ff}
+</style></head><body>
+
+<header>
+<h1>🪰 FLY BRAIN LAB</h1>
+<p>A live, embodied simulation of the <b>male fruit fly central nervous system</b> — the real
+MaleCNS connectome (164,740 neurons, 25.6M synapses) running as a spiking network,
+steering a body toward light.</p>
+<div class="kv">
+  <div><b>164,740</b>neurons</div>
+  <div><b>25.6 M</b>synaptic edges</div>
+  <div><b>~25</b>fps live video</div>
+  <div><b>0.3–0.7×</b>real-time brain (CPU)</div>
+</div>
+</header>
+
+<div class="wrap">
+  <div class="card" style="flex:1 1 880px">
+    <div><span id="dot" class="dot"></span><span id="status" class="lab" style="text-transform:none">connecting…</span></div>
+    <img id="vid" class="stream" alt="live fly simulation stream">
+    <div class="lab">Remote control <span id="ctrlstate" style="text-transform:none"></span></div>
+    <div class="grid">
+      <button class="ctl" onclick="cmd('light_left')">◀ light</button>
+      <button class="ctl" onclick="cmd('light_right')">light ▶</button>
+      <button class="ctl" onclick="cmd('light_up')">▲ light</button>
+      <button class="ctl" onclick="cmd('light_down')">light ▼</button>
+      <button class="ctl" onclick="cmd('light_on')">💡 light ON</button>
+      <button class="ctl" onclick="cmd('light_off')">⚫ light OFF</button>
+      <button class="ctl" onclick="cmd('auto')">🔄 auto-drift</button>
+      <button class="ctl" onclick="cmd('pause')">⏯ pause</button>
+      <button class="ctl" onclick="cmd('reset')">↺ reset fly</button>
+    </div>
+    <div class="lab">Knobs</div>
+    <div>innate phototaxis <input type="range" class="ctl" min="0" max="3" step="0.1" value="1" onchange="cmd('innate',this.value)">
+      · brain steering <input type="range" class="ctl" min="0" max="3" step="0.1" value="0.6" onchange="cmd('brain_gain',this.value)">
+      · speed <input type="range" class="ctl" min="0.2" max="2" step="0.1" value="1" onchange="cmd('speed',this.value)"></div>
+    <div class="lab">Control key (needed to move the light)</div>
+    <input type="password" id="ckey" placeholder="paste control key" oninput="saveKey(this.value)">
+  </div>
+
+  <div class="card" style="flex:0 1 400px">
+    <h2>Live brain</h2>
+    <img id="panel" class="stream" alt="brain activity panel">
+    <div class="lab">State</div>
+    <table id="st"></table>
+  </div>
+</div>
+
+<div class="wrap" style="margin-top:16px">
+  <div class="card" style="flex:1 1 560px">
+    <h2>How it works</h2>
+    <p>Light position → per-eye drive on the fly's <b>visual sensory neurons</b> →
+    through the measured connectome → <b>descending neurons</b> → <b>motor neurons</b> → steering and speed.
+    Synapse signs come from predicted neurotransmitter identity (GABA/glutamate = inhibitory).
+    Nothing between the eyes and the muscles is hand-wired.</p>
+    <p><span class="pill">numba LIF, event-driven</span><span class="pill">own brain thread</span>
+    <span class="pill">CPU only, no GPU</span><span class="pill">Flask + MJPEG</span></p>
+    <h2 style="margin-top:14px">Architecture</h2>
+    <p>This page is <b>static, served by GitHub Pages</b>. The brain cannot run here — GitHub Pages has no
+    compute. So the simulation runs on a separate machine and this page just connects to it:
+    <code>docs/backend.json</code> tells the page where the live backend is.</p>
+  </div>
+  <div class="card" style="flex:1 1 460px">
+    <h2>Honest limits</h2>
+    <ul>
+      <li>LIF is a strong simplification: real neurons have unknown dynamics, delays and neuromodulation that the connectome does not contain.</li>
+      <li>The body is a stylized 3D model, not NeuroMechFly/MuJoCo. An innate phototaxis term sits alongside the brain-derived steering (both are knobs above).</li>
+      <li>The live backend is a temporary tunnel — when it sleeps, the video stops but this page stays.</li>
+    </ul>
+    <h2 style="margin-top:12px">Source</h2>
+    <p><a href="https://github.com/opendeta/fly-semulator">github.com/opendeta/fly-semulator</a> — code MIT;
+    data CC-BY 4.0 (Berg et al. 2025, MaleCNS v1.0, Janelia / Cambridge / MRC LMB / Google Research;
+    Dorkenwald et al. 2024).</p>
+  </div>
+</div>
+
+<footer style="max-width:1180px;margin:22px auto 0;color:#5f7392;font-size:12.5px">
+  No connectome data is redistributed here — it is downloaded at runtime.
+</footer>
+
+<script>
+let BACK = null, CK = localStorage.getItem('flyctrl') || '';
+const $ = id => document.getElementById(id);
+
+function setStatus(on, txt){
+  $('dot').className = 'dot' + (on ? ' on' : '');
+  $('status').textContent = txt;
+}
+function saveKey(v){ CK = v.trim(); localStorage.setItem('flyctrl', CK); }
+function cmd(c, v){
+  if(!BACK || !CK) { alert('Paste the control key first (it is printed by the backend on start).'); return; }
+  fetch(BACK.url + '/api/cmd?k=' + encodeURIComponent(CK), {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({cmd:c, val: v===undefined?null:parseFloat(v)})
+  }).then(r => setStatus(r.ok, r.ok ? 'connected · control ok' : 'control key rejected'))
+    .catch(e => setStatus(false, 'backend unreachable'));
+}
+
+async function boot(){
+  $('ckey').value = CK;
+  try{
+    const r = await fetch('backend.json?t=' + Date.now());
+    BACK = await r.json();
+  }catch(e){ BACK = null; }
+  if(!BACK || !BACK.url){ setStatus(false, 'no backend configured'); return; }
+  $('vid').src = BACK.url + '/video.mjpg?k=' + encodeURIComponent(BACK.view_key);
+  $('panel').src = BACK.url + '/brain.png?k=' + encodeURIComponent(BACK.view_key);
+  setStatus(true, 'connecting to ' + BACK.url.replace('https://',''));
+  tick(); setInterval(tick, 1500);
+}
+
+function tick(){
+  fetch(BACK.url + '/api/state?k=' + encodeURIComponent(BACK.view_key))
+    .then(r => r.json())
+    .then(s => {
+      setStatus(true, 'live · ' + BACK.url.replace('https://',''));
+      $('st').innerHTML =
+        `<tr><td>sim time</td><td>${s.t}s</td></tr>
+         <tr><td>video</td><td>${s.fps} fps</td></tr>
+         <tr><td>brain clock</td><td>${s.brain_x}× real-time</td></tr>
+         <tr><td>dist to light</td><td>${s.dist} mm</td></tr>
+         <tr><td>fly speed</td><td>${s.speed} mm/s</td></tr>
+         <tr><td>turn rate</td><td>${s.turn} rad/s</td></tr>
+         <tr><td>lights caught</td><td>${s.caught}</td></tr>
+         <tr><td>visual L/R</td><td>${s.hz.vis_L} / ${s.hz.vis_R} Hz</td></tr>
+         <tr><td>descending L/R</td><td>${s.hz.dn_L} / ${s.hz.dn_R} Hz</td></tr>
+         <tr><td>motor</td><td>${s.hz.motor} Hz</td></tr>
+         <tr><td>KC / DAN / MBON</td><td>${s.hz.kc} / ${s.hz.dan} / ${s.hz.mbon} Hz</td></tr>`;
+      $('panel').src = BACK.url + '/brain.png?k=' + encodeURIComponent(BACK.view_key) + '&t=' + Date.now();
+    })
+    .catch(e => setStatus(false, 'backend asleep or tunnel restarted'));
+}
+boot();
+</script></body></html>
