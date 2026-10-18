@@ -24,6 +24,8 @@ class World:
         self.last_hist = 0.0
         self.rng = np.random.default_rng(11)
         self._drive = {}
+        self._pending_cmd = None
+        self._last_cmd = "-"
         self._t0 = time.time()
         self._steps0 = 0
         self._thread = None
@@ -44,13 +46,19 @@ class World:
 
     def cmd(self, c, val=None):
         L = self.light
-        if c == "light_left":   L["x"] -= 5
-        elif c == "light_right":L["x"] += 5
-        elif c == "light_up":   L["z"] = min(60, L["z"] + 5)
-        elif c == "light_down": L["z"] = max(5, L["z"] - 5)
+        self._pending_cmd = c + (("=" + str(val)) if val is not None else "")
+        if c in ("light_left", "light_right", "light_up", "light_down"):
+            self.auto_light = False          # manual control takes over
+        if c == "light_left":   L["x"] -= 6
+        elif c == "light_right":L["x"] += 6
+        elif c == "light_up":   L["z"] = min(60, L["z"] + 6)
+        elif c == "light_down": L["z"] = max(6, L["z"] - 6)
         elif c == "light_on":   L["on"] = True
         elif c == "light_off":  L["on"] = False
-        elif c == "auto":       self.auto_light = not self.auto_light
+        elif c == "auto":
+            self.auto_light = not self.auto_light
+            if self.auto_light:
+                self.catch_t = -100.0
         elif c == "pause":      self.paused = not self.paused
         elif c == "reset":
             self.fly.update(x=0.0, y=0.0, z=3.5, yaw=0.0)
@@ -98,8 +106,11 @@ class World:
         el = max(time.time() - self._t0, 1e-6)
         factor = ((self.brain.steps - self._steps0) * self.dt) / el
         p = self.brain.pop_hz()
+        if self._pending_cmd:
+            self._last_cmd = self._pending_cmd
+            self._pending_cmd = None
         self.stats = dict(
-            t=round(self.t, 1), dist=round(dist, 1), bearing=round(float(bearing), 2),
+            auto=self.auto_light, last_cmd=self._last_cmd, t=round(self.t, 1), dist=round(dist, 1), bearing=round(float(bearing), 2),
             speed=round(float(spd), 2), turn=round(float(turn), 2), brain_x=round(factor, 2),
             caught=self.caught, paused=False,
             light=dict(x=round(L["x"], 1), y=round(L["y"], 1), z=round(L["z"], 1), on=L["on"]),

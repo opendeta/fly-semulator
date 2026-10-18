@@ -78,19 +78,22 @@ steering a body toward light.</p>
 
 <div class="wrap">
   <div class="card">
+    <div id="toast" style="position:fixed;left:50%;transform:translateX(-50%);bottom:18px;
+     z-index:99;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;
+     transition:opacity .25s;background:#1d5c33;color:#fff;max-width:92vw;text-align:center"></div>
     <div class="statusline"><span id="dot" class="dot"></span><span id="status">connecting…</span></div>
     <img id="vid" class="stream" alt="live fly simulation stream" style="margin-top:8px">
     <div class="lab">Remote control <span id="ctrlstate" style="text-transform:none"></span></div>
     <div class="btns">
-      <button class="ctl" onclick="cmd('light_left')">◀ light</button>
-      <button class="ctl" onclick="cmd('light_right')">light ▶</button>
-      <button class="ctl" onclick="cmd('light_up')">▲ light</button>
-      <button class="ctl" onclick="cmd('light_down')">light ▼</button>
-      <button class="ctl" onclick="cmd('light_on')">💡 light ON</button>
-      <button class="ctl" onclick="cmd('light_off')">⚫ light OFF</button>
-      <button class="ctl" onclick="cmd('auto')">🔄 auto-drift</button>
-      <button class="ctl" onclick="cmd('pause')">⏯ pause</button>
-      <button class="ctl" onclick="cmd('reset')">↺ reset fly</button>
+      <button class="ctl" onclick="cmd('light_left',null,this)">◀ light</button>
+      <button class="ctl" onclick="cmd('light_right',null,this)">light ▶</button>
+      <button class="ctl" onclick="cmd('light_up',null,this)">▲ light</button>
+      <button class="ctl" onclick="cmd('light_down',null,this)">light ▼</button>
+      <button class="ctl" onclick="cmd('light_on',null,this)">💡 light ON</button>
+      <button class="ctl" onclick="cmd('light_off',null,this)">⚫ light OFF</button>
+      <button class="ctl" onclick="cmd('auto',null,this)">🔄 auto-drift</button>
+      <button class="ctl" onclick="cmd('pause',null,this)">⏯ pause</button>
+      <button class="ctl" onclick="cmd('reset',null,this)">↺ reset fly</button>
     </div>
     <div class="lab">Knobs</div>
     <div class="knob"><label>innate phototaxis <span id="v1">1.0</span></label>
@@ -105,7 +108,7 @@ steering a body toward light.</p>
       <input type="range" class="ctl" min="0.2" max="2" step="0.1" value="1"
         oninput="document.getElementById('v3').textContent=(+this.value).toFixed(1)"
         onchange="cmd('speed',this.value)"></div>
-    <div class="lab">Control key (needed to move the light)</div>
+    <div class="lab">Control key (needed to move the light) — or open this page with <code>?k=YOUR_KEY</code></div>
     <input type="password" id="ckey" placeholder="paste control key" oninput="saveKey(this.value)">
   </div>
 
@@ -152,6 +155,8 @@ steering a body toward light.</p>
 
 <script>
 let BACK = null, CK = localStorage.getItem('flyctrl') || '';
+const URLK = new URLSearchParams(location.search).get('k') || '';
+if (URLK) { CK = URLK; localStorage.setItem('flyctrl', CK); }
 const $ = id => document.getElementById(id);
 
 function setStatus(on, txt){
@@ -159,13 +164,21 @@ function setStatus(on, txt){
   $('status').textContent = txt;
 }
 function saveKey(v){ CK = v.trim(); localStorage.setItem('flyctrl', CK); }
-function cmd(c, v){
-  if(!BACK || !CK){ alert('Paste the control key first (the backend prints it on start).'); return; }
+function toast(m, ok){
+  const t = $('toast'); t.textContent = m;
+  t.style.background = ok ? '#1d5c33' : '#5c1d1d'; t.style.opacity = 1;
+  clearTimeout(window._tt); window._tt = setTimeout(() => t.style.opacity = 0, 1800);
+}
+function cmd(c, v, btn){
+  if(btn){ btn.style.background = '#3a5285'; setTimeout(() => btn.style.background = '', 260); }
+  if(!BACK){ toast('no backend configured', false); return; }
+  if(!CK){ toast('paste the control key below first', false);
+           $('ckey').scrollIntoView({behavior:'smooth', block:'center'}); return; }
   fetch(BACK.url + '/api/cmd?k=' + encodeURIComponent(CK), {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({cmd:c, val: v===undefined?null:parseFloat(v)})
-  }).then(r => setStatus(r.ok, r.ok ? 'connected · control ok' : 'control key rejected'))
-    .catch(e => setStatus(false, 'backend unreachable'));
+  }).then(r => toast(r.ok ? ('✓ ' + c) : ('✗ ' + c + ' — control key rejected'), r.ok))
+    .catch(e => toast('✗ backend unreachable', false));
 }
 async function boot(){
   $('ckey').value = CK;
@@ -190,7 +203,10 @@ function tick(){
       ['visual L/R', s.hz.vis_L.toFixed(1) + ' / ' + s.hz.vis_R.toFixed(1) + ' Hz'],
       ['descending L/R', s.hz.dn_L + ' / ' + s.hz.dn_R + ' Hz'],
       ['motor', s.hz.motor + ' Hz'],
-      ['KC / DAN / MBON', Math.round(s.hz.kc) + ' / ' + Math.round(s.hz.dan) + ' / ' + Math.round(s.hz.mbon) + ' Hz']
+      ['KC / DAN / MBON', Math.round(s.hz.kc) + ' / ' + Math.round(s.hz.dan) + ' / ' + Math.round(s.hz.mbon) + ' Hz'],
+      ['light', (s.light.on ? 'ON' : 'OFF') + ' · auto-drift ' + (s.auto ? 'ON' : 'OFF')],
+      ['light pos', 'x ' + s.light.x + '  y ' + s.light.y + '  z ' + s.light.z],
+      ['last command', s.last_cmd]
     ];
     $('st').innerHTML = rows.map(r =>
       '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('');

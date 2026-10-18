@@ -204,18 +204,21 @@ border-bottom:1px solid #1c2434;font-size:clamp(12.5px,3.5vw,13.5px)}
 <h1>🦟 FLY BRAIN LAB<small>MaleCNS connectome · 164,740 neurons · live</small></h1>
 <div class="wrap">
  <div class="card">
+  <div id="toast" style="position:fixed;left:50%;transform:translateX(-50%);bottom:18px;
+   z-index:99;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;
+   transition:opacity .25s;background:#1d5c33;color:#fff;max-width:92vw;text-align:center"></div>
   <img id="vid" class="stream" alt="live fly stream">
   <div class="lab">Remote control</div>
   <div class="btns">
-   <button onclick="cmd('light_left')">◀ light</button>
-   <button onclick="cmd('light_right')">light ▶</button>
-   <button onclick="cmd('light_up')">▲ light</button>
-   <button onclick="cmd('light_down')">light ▼</button>
-   <button onclick="cmd('light_on')">💡 ON</button>
-   <button onclick="cmd('light_off')">⚫ OFF</button>
-   <button onclick="cmd('auto')">🔄 auto</button>
-   <button onclick="cmd('pause')">⏯ pause</button>
-   <button onclick="cmd('reset')">↺ reset</button>
+   <button onclick="cmd('light_left',null,this)">◀ light</button>
+   <button onclick="cmd('light_right',null,this)">light ▶</button>
+   <button onclick="cmd('light_up',null,this)">▲ light</button>
+   <button onclick="cmd('light_down',null,this)">light ▼</button>
+   <button onclick="cmd('light_on',null,this)">💡 ON</button>
+   <button onclick="cmd('light_off',null,this)">⚫ OFF</button>
+   <button onclick="cmd('auto',null,this)">🔄 auto</button>
+   <button onclick="cmd('pause',null,this)">⏯ pause</button>
+   <button onclick="cmd('reset',null,this)">↺ reset</button>
   </div>
   <div class="lab">Knobs</div>
   <div class="knob"><label>innate phototaxis <span id="v1">1.0</span></label>
@@ -241,8 +244,15 @@ border-bottom:1px solid #1c2434;font-size:clamp(12.5px,3.5vw,13.5px)}
 const KEY = new URLSearchParams(location.search).get('k') || '';
 const Q = KEY ? ('?k=' + encodeURIComponent(KEY)) : '';
 document.getElementById('vid').src = '/video.mjpg' + Q;
-function cmd(c,v){fetch('/api/cmd'+Q,{method:'POST',headers:{'Content-Type':'application/json'},
- body:JSON.stringify({cmd:c,val:v===undefined?null:parseFloat(v)})})}
+function toast(m,ok){const t=document.getElementById('toast');t.textContent=m;
+ t.style.background=ok?'#1d5c33':'#5c1d1d';t.style.opacity=1;
+ clearTimeout(window._tt);window._tt=setTimeout(()=>t.style.opacity=0,1800)}
+function cmd(c,v,btn){
+ if(btn){btn.style.background='#3a5285';setTimeout(()=>btn.style.background='',260)}
+ fetch('/api/cmd'+Q,{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({cmd:c,val:v===undefined?null:parseFloat(v)})})
+ .then(r=>toast(r.ok?('✓ '+c):('✗ '+c+' (rejected)'),r.ok))
+ .catch(e=>toast('✗ backend unreachable',false))}
 function tick(){fetch('/api/state'+Q).then(r=>r.json()).then(s=>{
  const rows=[['sim time',s.t+' s'],['video',s.fps+' fps'],
   ['brain clock',s.brain_x+'× real-time'],['dist to light',s.dist+' mm'],
