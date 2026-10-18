@@ -74,17 +74,7 @@ cloudflared tunnel --url http://127.0.0.1:8000 --no-autoupdate --protocol http2
 
 > UDP/QUIC is blocked on many sandboxes — use `--protocol http2` if the tunnel
 > reports `QUIC connection failed`.
-
-### Bengali quickstart (বাংলা)
-
-```bash
-bash scripts/fetch_data.sh   # কানেক্টোম ডেটা নামাবে (~৫৩৫ MB)
-cd scripts && python3 webapp.py
-```
-
-ব্রাউজারে `http://127.0.0.1:8000` খুলে স্ক্রিনে প্রিন্ট হওয়া ইউজার/পাসওয়ার্ড দিয়ে ঢুকুন।
-পাবলিক লিংক চাইলে উপরের `cloudflared` কমান্ডটি চালান।
-
+> 
 ## What you can do in the dashboard
 
 * **live 3D fly** (MJPEG, ~25 fps) walking/flying toward a drifting light
