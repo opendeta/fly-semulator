@@ -97,7 +97,7 @@ class Brain:
             if self.steps % 100 == 0:
                 r = self.rate / self.target_rate
                 f = 1.0 + 0.05 * np.clip(r - 1.0, -1.0, 1.0)
-                self.thr = np.clip(self.thr * f, 0.35, 6.0).astype(np.float32)
+                self.thr = np.clip(self.thr * f, 0.35, 2.5).astype(np.float32)
 
     def hz(self, group):
         ix = self.idx[group]

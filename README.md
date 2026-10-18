@@ -109,6 +109,26 @@ that check and writes screenshots.
 | `scripts/bench_loop.py` | loop benchmark (fps, brain real-time factor) |
 | `scripts/mobile_check.py` | Playwright responsive check + mobile screenshots |
 
+## Associative learning (video in, behaviour out)
+
+`scripts/video_input.py` turns an uploaded clip into what the fly's compound eyes would
+see (left/right luminance + motion). `scripts/build_plasticity.py` finds the real
+**61,210 KC→MBON synapses** and labels MBON compartments appetitive/aversive from the
+connectome's own PAM vs PPL1 innervation (316 / 16 DANs). `scripts/learner.py` then applies
+dopamine-gated Hebbian plasticity (Hige 2015, Handler 2019, Aso 2014) to those synapses
+while the fly is rewarded with sugar for orienting to a visual cue.
+
+Measured in a headless run (`scripts/train_test.py`, 12 trials, tethered orientation assay,
+learned component isolated above the innate MBON baseline):
+
+| trial | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| oriented % | 59 | 82 | 88 | 83 | 94 | 77 | 84 | 95 | 89 | 95 | 95 | 94 |
+
+first 3 trials **76.4 %** → last 3 trials **94.9 %** (+18.5 pp); KC→MBON weights drift to
+1.49× (appetitive) / 0.55× (aversive) of their connectome values. The plasticity rule is a
+model, not a measurement — see the limitations below.
+
 ## Honest limitations
 
 * LIF is a **strong simplification**: real neurons have unknown dynamics, delays,
