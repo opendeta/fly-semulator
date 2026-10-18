@@ -1,0 +1,17 @@
+# secrets & runtime
+fly_login.txt
+*.log
+*.pid
+.env
+
+# data (fetched by scripts/fetch_data.sh)
+data/
+*.feather
+*.npz
+*.parquet
+
+# outputs
+out/
+*.mp4
+__pycache__/
+*.pyc
