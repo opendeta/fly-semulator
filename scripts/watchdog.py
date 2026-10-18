@@ -58,6 +58,11 @@ def publish(url):
                     "-m", f"watchdog: backend url -> {url}"])
     r = subprocess.run(["git", "-C", str(REPO), "push", "-q", "origin", "main"],
                        capture_output=True, text=True)
+    if r.returncode != 0:      # e.g. the PAT was revoked -> try the deploy key over SSH
+        r = subprocess.run(["git", "-C", str(REPO), "push", "-q",
+                            "git@github.com:opendeta/fly-semulator.git", "main"],
+                           capture_output=True, text=True)
+        log("https push failed -> ssh push rc=%d" % r.returncode)
     log(f"published backend url {url} (push rc={r.returncode})")
     return True
 
