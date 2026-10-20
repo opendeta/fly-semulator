@@ -34,7 +34,8 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024
 world = World()
 world.start_brain_thread()
-state = {"frame": None, "frame_small": None, "panel": None, "curve": None, "fps": 0.0}
+state = {"frame": None, "frame_small": None, "frame_portrait": None,
+         "panel": None, "curve": None, "fps": 0.0}
 UPLOADS = os.environ.get("FLY_UPLOADS", "uploads")
 VID_DIR = os.environ.get("FLY_VIDEOS", "/workspace/fly/videos/drives")
 os.makedirs(UPLOADS, exist_ok=True)
@@ -106,6 +107,10 @@ def sim_loop():
             sbuf = io.BytesIO()
             img.resize((480, 270), Image.BILINEAR).save(sbuf, "JPEG", quality=72)
             state["frame_small"] = sbuf.getvalue()
+        if n % 3 == 0:                       # phone-shaped frame (fly fills the screen)
+            pbuf = io.BytesIO()
+            render_frame(world, 480, 854, portrait=True).save(pbuf, "JPEG", quality=76)
+            state["frame_portrait"] = pbuf.getvalue()
         n += 1
         now = time.time()
         if now - fps_t >= 1.0:
@@ -135,10 +140,14 @@ def index():
 def video():
     fps = max(2, min(30, int(request.args.get("fps", 25) or 25)))
     small = request.args.get("small") == "1"
+    orient = request.args.get("o", "")          # "portrait" for phones
     def gen():
         delay = 1.0 / fps
         while True:
-            f = state["frame_small" if small else "frame"]
+            if orient == "portrait":
+                f = state["frame_portrait"]
+            else:
+                f = state["frame_small" if small else "frame"]
             if f:
                 yield (b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
                        + str(len(f)).encode() + b"\r\n\r\n" + f + b"\r\n")
@@ -298,6 +307,7 @@ border-bottom:1px solid #1c2434;font-size:clamp(12.5px,3.5vw,13.5px)}
    transition:opacity .25s;background:#1d5c33;color:#fff;max-width:92vw;text-align:center"></div>
   <img id="vid" class="stream" alt="live fly stream">
   <button id="lite" onclick="toggleLite()" style="width:100%">⚡ Lite mode</button>
+  <button onclick="fs()" style="width:100%;margin-top:4px">⛶ fullscreen video</button>
   <div class="lab">Remote control</div>
   <div class="btns">
    <button onclick="cmd('light_left',null,this)">◀ light</button>
@@ -380,11 +390,21 @@ function busy(){                       // never fight the user for CPU while typ
   return document.hidden || (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'));
 }
 function setStream(){
-  document.getElementById('vid').src = u('/video.mjpg', LITE ? {fps: 8, small: 1} : {fps: 25});
+  const narrow = window.innerWidth < 760;
+  document.getElementById('vid').src = u('/video.mjpg',
+      narrow ? {o: 'portrait', fps: 6} : (LITE ? {fps: 8, small: 1} : {fps: 25}));
+  document.getElementById('vid').style.maxWidth = narrow ? '480px' : '';
   const b = document.getElementById('lite');
   if(b) b.textContent = LITE ? '⚡ Lite mode (tap for full)' : '🎬 Full mode (tap for lite)';
 }
 function toggleLite(){ LITE = !LITE; setStream(); tick(true); }
+function fs(){
+  const v = document.getElementById('vid');
+  if (v.requestFullscreen) { v.requestFullscreen().catch(e=>alert('fullscreen blocked')); }
+  else { v.style.position='fixed'; v.style.inset='0'; v.style.zIndex='9999';
+         v.style.width='100vw'; v.style.maxWidth='none'; v.style.background='#000';
+         v.onclick = () => { v.removeAttribute('style'); v.onclick=null; }; }
+}
 function toast(m, ok){
   const t = document.getElementById('toast'); if(!t) return;
   t.textContent = m; t.style.background = ok ? '#1d5c33' : '#5c1d1d'; t.style.opacity = 1;

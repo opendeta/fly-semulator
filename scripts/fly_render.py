@@ -40,7 +40,7 @@ def _poly(d, cam, pts, fill, W, H, outline=None):
     px, py, _ = cam.project(pts, W, H)
     d.polygon(list(zip(px, py)), fill=fill, outline=outline)
 
-def render_frame(world, W=854, H=480):
+def render_frame(world, W=854, H=480, portrait=False):
     f = world.fly
     yaw = f["yaw"]
     fly = np.array([f["x"], f["y"], f["z"]])
@@ -52,7 +52,10 @@ def render_frame(world, W=854, H=480):
                          fly[1] + p[0]*sa + p[1]*ca,
                          fly[2] + p[2]])
 
-    cam = Cam(to_world([-15.0, 0, 6.8]), to_world([1.5, 0, 2.3]))
+    if portrait:                       # phone-shaped frame: fly fills much more of it
+        cam = Cam(to_world([-13.0, 0, 6.2]), to_world([1.2, 0, 2.9]), f=W * 1.05)
+    else:
+        cam = Cam(to_world([-15.0, 0, 6.8]), to_world([1.5, 0, 2.3]))
     img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img, "RGBA")
 
@@ -164,15 +167,22 @@ def render_frame(world, W=854, H=480):
     # HUD
     st = world.stats or {}
     hz = st.get("hz", {})
-    lines = [
-        "FLY BRAIN LAB  ·  MaleCNS connectome (164,740 neurons) · live",
-        f"t={st.get('t',0)}s   speed={st.get('speed',0)} mm/s   dist-to-light={st.get('dist',0)} mm   caught={st.get('caught',0)}",
-        f"brain {st.get('brain_x',0)}x real-time   VIS {hz.get('vis_L',0)}/{hz.get('vis_R',0)} Hz   "
-        f"DN {hz.get('dn_L',0)}/{hz.get('dn_R',0)} Hz   MOTOR {hz.get('motor',0)} Hz",
-    ]
-    y = 12
+    if portrait:
+        lines = [
+            "FLY BRAIN LAB · live",
+            f"t={st.get('t',0)}s  {st.get('speed',0)} mm/s  d={st.get('dist',0)} mm",
+            f"VIS {hz.get('vis_L',0)}/{hz.get('vis_R',0)}  DN {hz.get('dn_L',0)}/{hz.get('dn_R',0)}  M {hz.get('motor',0)}",
+        ]
+    else:
+        lines = [
+            "FLY BRAIN LAB  ·  MaleCNS connectome (164,740 neurons) · live",
+            f"t={st.get('t',0)}s   speed={st.get('speed',0)} mm/s   dist-to-light={st.get('dist',0)} mm   caught={st.get('caught',0)}",
+            f"brain {st.get('brain_x',0)}x real-time   VIS {hz.get('vis_L',0)}/{hz.get('vis_R',0)} Hz   "
+            f"DN {hz.get('dn_L',0)}/{hz.get('dn_R',0)} Hz   MOTOR {hz.get('motor',0)} Hz",
+        ]
+    y = 10 if portrait else 12
     for i, s in enumerate(lines):
-        d.text((13, y), s, font=FONT_B if i == 0 else FONT_S,
+        d.text((10 if portrait else 13, y), s, font=FONT_B if i == 0 else FONT_S,
                fill=(255, 230, 170) if i == 0 else (210, 220, 238))
-        y += 27
+        y += 24 if portrait else 27
     return img
