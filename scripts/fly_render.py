@@ -57,62 +57,55 @@ def render_frame(world, W=854, H=480):
     d = ImageDraw.Draw(img, "RGBA")
 
     # sky
-    top = (52, 96, 156); hor = (168, 206, 226)
+    top = (150, 180, 200); hor = (206, 222, 228)
     for i in range(0, H, 8):
         t = i / H
         c = tuple(int(top[k] + (hor[k]-top[k])*t) for k in range(3))
         d.rectangle([0, i, W, i+8], fill=c)
 
-    # ---------------- meadow: grass field with tufts, flowers and haze ----------
-    # horizon = where the ground plane meets infinity along the view direction
+    # ---------- clean low-poly field (flat ground, hills, simple trees) ----------
     far_pt = cam.project([[f["x"] + 600 * cam.fwd[0], f["y"] + 600 * cam.fwd[1], 0.0]], W, H)
-    hz_y = float(far_pt[1][0])
-    hz_y = max(0.0, min(hz_y, float(H) - 1))
-    for i in range(int(hz_y), H, 4):                 # green ground, lighter far away
-        t = (i - hz_y) / max(H - hz_y, 1)
-        c = (int(118 + 22 * (1 - t)), int(156 + 26 * (1 - t)), int(74 + 18 * (1 - t)))
-        d.rectangle([0, i, W, i + 4], fill=c)
-    d.rectangle([0, int(hz_y) - 14, W, int(hz_y) + 2], fill=(196, 216, 200))  # haze band
+    hz_y = max(0.0, min(float(far_pt[1][0]), float(H) - 1))
 
+    # 1) flat ground: warm sand, slightly darker far away
+    for i in range(int(hz_y), H, 4):
+        t = (i - hz_y) / max(H - hz_y, 1)
+        c = (int(214 + 12 * (1 - t)), int(211 + 12 * (1 - t)), int(200 + 12 * (1 - t)))
+        d.rectangle([0, i, W, i + 4], fill=c)
+
+    # 2) soft rounded hills sitting on the horizon (background, cheap)
+    hills = [(0.06, 78, 34, (86, 138, 66)), (0.24, 120, 44, (72, 122, 56)),
+             (0.52, 150, 50, (60, 108, 48)), (0.78, 112, 40, (78, 128, 60)),
+             (0.95, 84, 30, (92, 144, 70))]
+    for fx_, hw, hh, col in hills:
+        cx = fx_ * W
+        d.ellipse([cx - hw, hz_y - hh, cx + hw, hz_y + hh * 0.45], fill=col)
+    # distant tree line: a dark green strip right on the horizon
+    d.rectangle([0, int(hz_y) - 7, W, int(hz_y) + 3], fill=(52, 92, 44))
+    d.rectangle([0, int(hz_y) - 16, W, int(hz_y) - 5], fill=(198, 216, 210))   # haze
+
+    # 3) a few stylised trees placed in world space (they scroll as the fly walks)
     def h2(x, y, k):
         n = (int(x * 73856093) ^ int(y * 19349663) ^ k) & 0xFFFFFFFF
         n = (n * 2654435761) & 0xFFFFFFFF
         return (n % 10000) / 10000.0
 
-    fx, fy = f["x"], f["y"]
-    step = 1.7
-    i0, i1 = int((fx - 24) // step), int((fx + 24) // step)
-    j0, j1 = int((fy - 24) // step), int((fy + 24) // step)
-    tufts = []
-    for i in range(i0, i1 + 1):
-        for j in range(j0, j1 + 1):
-            wx = i * step + (h2(i, j, 1) - 0.5) * step
-            wy = j * step + (h2(i, j, 2) - 0.5) * step
-            dist = ((wx - fx) ** 2 + (wy - fy) ** 2) ** 0.5
-            if dist > 24:
-                continue
-            tufts.append((dist, wx, wy, h2(i, j, 3), h2(i, j, 4)))
-    tufts.sort(key=lambda t: -t[0])
-    for dist, wx, wy, r1, r2 in tufts:
-        haze = min(1.0, dist / 24.0)
-        col = (int(66 + 74 * (1 - haze)), int(104 + 78 * (1 - haze)), int(44 + 40 * (1 - haze)), 255)
-        hgt = 0.55 + 1.5 * r1
-        lean = (r2 - 0.5) * 0.9
-        _seg(d, cam, [wx, wy, 0.0], [wx + lean, wy + lean * 0.5, hgt], 0.11, col, W, H)
-        if r2 > 0.4:
-            _seg(d, cam, [wx, wy, 0.0], [wx - lean * 0.8, wy + lean * 0.7, hgt * 0.75], 0.1, col, W, H)
-        if r1 > 0.955:                                # occasional flower
-            fc = (236, 110, 140) if r2 > 0.5 else (250, 220, 96)
-            _sphere(d, cam, [wx + lean, wy + lean * 0.5, hgt + 0.2], 0.3, fc + (255,), W, H)
-
-    # a few taller clusters as landmarks
-    for k in range(3):
-        ax = fx + 11 * np.cos(k * 2.1 + 0.7)
-        ay = fy + 11 * np.sin(k * 2.1 + 0.7)
-        for b in range(6):
-            lean = (b - 2.5) * 0.28
-            _seg(d, cam, [ax, ay, 0.0], [ax + lean, ay + lean * 0.3, 2.6 + b * 0.22],
-                 0.13, (108, 148, 66, 255), W, H)
+    trees = []
+    for k in range(7):
+        ang = k * 0.9 + 0.3
+        rad = 21 + 15 * h2(k, 7, 11)
+        wx = f["x"] + rad * np.cos(ang)
+        wy = f["y"] + rad * np.sin(ang)
+        dist = ((wx - f["x"]) ** 2 + (wy - f["y"]) ** 2) ** 0.5
+        trees.append((dist, wx, wy, 0.45 + 0.45 * h2(k, 3, 5)))
+    trees.sort(key=lambda t: -t[0])
+    for dist, wx, wy, sc in trees:
+        haze = min(1.0, dist / 34.0)
+        trunk = (int(104 + 60 * haze), int(78 + 60 * haze), int(56 + 60 * haze))
+        leaf = (int(238 - 40 * haze), int(236 - 40 * haze), int(226 - 40 * haze))
+        _seg(d, cam, [wx, wy, 0.0], [wx, wy, 3.4 * sc], 0.30 * sc, trunk + (255,), W, H)
+        for dx, dy, dz, r in [(-0.9, 0.2, 3.6, 1.5), (0.9, -0.2, 3.7, 1.4), (0.0, 0.0, 4.7, 1.6)]:
+            _sphere(d, cam, [wx + dx * sc, wy + dy * sc, (dz + 0.9) * sc], r * sc, leaf + (255,), W, H)
 
     # light source glow
     L = world.light
