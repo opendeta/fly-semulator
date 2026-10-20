@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw, ImageFilter
 MESH = "/workspace/fly/art/meshes"
 RIG = "/workspace/fly/art/rigging.yaml"
 W, H = 1600, 900
-BLUE = np.array([70, 170, 255], np.float32)
+BLUE = np.array([120, 215, 255], np.float32)
 
 PARENT = {
     "c_head": "c_thorax", "c_rostrum": "c_head", "c_haustellum": "c_rostrum",
@@ -96,11 +96,16 @@ def world_transforms(rig):
         else:
             Rp, tp = build(par)
             T[name] = (Rp @ R, tp + Rp @ pos)
-        if name.endswith("_coxa"):                  # swing the whole leg about its attachment
-            side = 1.0 if name[0] == "l" else -1.0
+        side = 1.0 if name[0] == "l" else -1.0
+        if name.endswith("_coxa"):                  # legs: angle down and slightly out
             Rw, tw = T[name]
-            Ry = rot_axis("y", -72.0 * side)
-            T[name] = (Ry @ Rw, tw)
+            T[name] = (rot_axis("y", -26.0 * side) @ Rw, tw)
+        if name.endswith("_wing"):                  # wings: sweep back and up, both sides alike
+            Rw, tw = T[name]
+            T[name] = (rot_axis("y", 30.0) @ rot_axis("x", -26.0 * side) @ Rw, tw)
+        if name.endswith("_haltere"):
+            Rw, tw = T[name]
+            T[name] = (rot_axis("y", 20.0 * side) @ Rw, tw)
         return T[name]
     for k in rig:
         build(k)
@@ -153,9 +158,9 @@ def main():
                            if not any(v.shape[0] == 0 for _ in [0])])
     allv = body
     c = (allv.max(0) + allv.min(0)) / 2
-    span = (allv.max(0) - allv.min(0)).max() * 0.50
-    scale = 0.92 * min(W, H) / span
-    R, proj = camera(yaw=np.pi / 2 + 0.42, pitch=-0.10, roll=0.0, scale=scale,
+    span = (allv.max(0) - allv.min(0)).max() * 0.66
+    scale = 0.86 * min(W, H) / span
+    R, proj = camera(yaw=-np.pi / 2 - 0.55, pitch=-0.16, roll=0.0, scale=scale,
                      cx=W * 0.52, cy=H * 0.52)
     # head bbox in world space (where the brain goes)
     head_v = []
@@ -189,45 +194,82 @@ def main():
         nz = N / (np.linalg.norm(N) + 1e-9)
         fres = 1.0 - abs(float(nz @ view))
         light = max(0.0, float(nz @ np.array([0.3, -0.6, -0.7], np.float32)))
-        b = 0.18 + 0.75 * fres + 0.35 * light
+        b = 0.26 + 0.72 * fres + 0.30 * light
         col = np.clip(BLUE * b, 0, 255)
-        alpha = int(np.clip(18 + 120 * fres + 40 * light, 0, 200))
+        alpha = int(np.clip(20 + 105 * fres + 32 * light, 0, 190))
         d.polygon([(float(P[0, 0]), float(P[0, 1])), (float(P[1, 0]), float(P[1, 1])),
                    (float(P[2, 0]), float(P[2, 1]))],
                   fill=(int(col[0]), int(col[1]), int(col[2]), alpha))
-    # ---- the real neuron cloud, glowing inside the head (2D composite) ----
+    # ---- the real neuron cloud, glowing inside the head ----
     try:
         import sys as _sys
         _sys.path.insert(0, "/workspace/fly/scripts")
         from brain_art import load_points, render_cloud
+        from scipy.ndimage import gaussian_filter as _gf
         if head_v is not None:
+            hc = (head_v.max(0) + head_v.min(0)) / 2          # head centre (world)
+            hs = head_v.max(0) - head_v.min(0)                # head size   (world)
             hp = proj(head_v - c)
             hx0, hx1 = float(hp[:, 0].min()), float(hp[:, 0].max())
             hy0, hy1 = float(hp[:, 1].min()), float(hp[:, 1].max())
-            hw, hh = int((hx1 - hx0) * 0.92), int((hy1 - hy0) * 0.92)
-            pts, cols = load_points(only_brain=True)
-            cloud, _, _ = render_cloud(pts, cols, W=max(hw, 40), H=max(hh, 40),
-                                       yaw=1.15, pitch=0.15, sigma=1.8, gain=1.0)
-            cg = np.asarray(cloud, np.float32)
-            cg = np.clip(cg / max(cg.max(), 1e-6) * 165.0, 0, 255)
-            cxa, cya = int((hx0 + hx1) / 2 - cg.shape[1] / 2), int((hy0 + hy1) / 2 - cg.shape[0] / 2)
+
+            pts, _ = load_points(only_brain=True)
+            pc = pts.mean(0); ps = pts.max(0) - pts.min(0)
+            kk = 0.50 * float(hs.max()) / float(ps.max())
+
+            # six neuron regions (k-means) -> the coloured blobs of the reference figure
+            sd = pts.std(0) + 1e-6
+            X = (pts / sd).astype(np.float32)
+            rng = np.random.default_rng(3)
+            C = X[rng.choice(len(X), 6, replace=False)].copy()
+            for _ in range(14):
+                dd = ((X[:, None, :] - C[None, :, :]) ** 2).sum(-1)
+                lab = dd.argmin(1)
+                for k in range(6):
+                    if (lab == k).any():
+                        C[k] = X[lab == k].mean(0)
+            PAL = np.array([[255, 70, 150], [255, 150, 40], [130, 100, 255],
+                            [40, 220, 255], [255, 230, 80], [90, 255, 160]], np.float32)
+
             canvas = np.asarray(img, np.float32)
+            for k in range(6):
+                m = lab == k
+                if m.sum() < 50:
+                    continue
+                q = (pts[m] - pc) * kk + hc
+                qp = proj(q - c)
+                cxm, cym = float(qp[:, 0].mean()), float(qp[:, 1].mean())
+                rx = float(qp[:, 0].std()) * 2.2 + 8
+                ry = float(qp[:, 1].std()) * 2.2 + 8
+                yy, xx = np.ogrid[:H, :W]
+                mask = _gf(np.exp(-(((xx - cxm) / rx) ** 2 + ((yy - cym) / ry) ** 2)), 7.0)
+                canvas += mask[:, :, None] * PAL[k][None, None, :] * 0.30
+
+            # and the fine neuron cloud itself, softly
+            hw = max(int((hx1 - hx0) * 0.55), 40); hh = max(int((hy1 - hy0) * 0.55), 40)
+            cloud, _, _ = render_cloud(pts, PAL[lab], W=hw, H=hh, yaw=1.15, pitch=0.15,
+                                       sigma=1.8, gain=1.0)
+            cg = np.asarray(cloud, np.float32)
+            cg = np.clip(cg / max(cg.max(), 1e-6) * 140.0, 0, 255)
+            mm = cg.mean(-1, keepdims=True)
+            cg = np.clip(mm + (cg - mm) * 2.0, 0, 255)
+            cxa = int((hx0 + hx1) / 2 - cg.shape[1] / 2)
+            cya = int((hy0 + hy1) / 2 - cg.shape[0] / 2)
             ys = slice(max(cya, 0), min(cya + cg.shape[0], H))
             xs = slice(max(cxa, 0), min(cxa + cg.shape[1], W))
             sub = cg[max(0, -cya):max(0, -cya) + (ys.stop - ys.start),
                      max(0, -cxa):max(0, -cxa) + (xs.stop - xs.start)]
             region = canvas[ys, xs]
-            # screen blend: brightens with the brain's colours without blowing out to white
-            canvas[ys, xs] = 255.0 - (255.0 - region) * (255.0 - sub * 0.22) / 255.0
+            canvas[ys, xs] = 255.0 - (255.0 - region) * (255.0 - sub * 0.45) / 255.0
             img = Image.fromarray(np.clip(canvas, 0, 255).astype(np.uint8))
-            print("neuron cloud composited into the head:", len(pts))
+            print("brain: 6 regions + cloud inside the head")
     except Exception as e:
         print("neuron cloud skipped:", repr(e))
 
     base = np.asarray(img, np.float32)
     bloom = np.asarray(img.filter(ImageFilter.GaussianBlur(16)), np.float32)
-    out = np.clip(base + bloom * 0.55, 0, 255).astype(np.uint8)
-    im = Image.fromarray(out)
+    out = np.clip(base + bloom * 0.38, 0, 255).astype(np.uint8)
+    im = Image.fromarray(out).transpose(Image.FLIP_LEFT_RIGHT)   # head to the right, like the reference
     im.save("/workspace/fly/art/fly_xray.png")
     im.resize((1200, 675), Image.LANCZOS).save("/workspace/fly/art/fly_xray_small.jpg", quality=86)
     print("saved fly_xray.png", im.size)
