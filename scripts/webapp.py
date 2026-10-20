@@ -317,6 +317,7 @@ body.fsmode #vid { width: 100vw !important; height: 100vh !important; max-width:
   <div id="fsWrap"><img id="vid" class="stream" alt="live fly stream"></div>
   <button id="lite" onclick="toggleLite()" style="width:100%">⚡ Lite mode</button>
   <button onclick="fs()" style="width:100%;margin-top:4px">⛶ fullscreen video</button>
+    <button id="sndbtn" onclick="audioToggle()" style="width:100%;margin-top:4px">🔈 hear the brain</button>
   <div class="lab">Remote control</div>
   <div class="btns">
    <button onclick="cmd('light_left',null,this)">◀ light</button>
@@ -412,35 +413,61 @@ function busy(){                       // never fight the user for CPU while typ
 }
 function setStream(){
   const narrow = window.innerWidth < 760;
-  const landscape = window.innerWidth > window.innerHeight;
   document.getElementById('vid').src = u('/video.mjpg',
-      FS ? (landscape ? {fps: 15} : {o: 'portrait', fps: 10})
-         : (narrow ? {o: 'portrait', fps: 6} : (LITE ? {fps: 8, small: 1} : {fps: 25})));
-  document.getElementById('vid').style.maxWidth = (narrow && !FS) ? '480px' : '';
+      narrow ? {o: 'portrait', fps: 6} : (LITE ? {fps: 8, small: 1} : {fps: 25}));
+  document.getElementById('vid').style.maxWidth = narrow ? '480px' : '';
   const b = document.getElementById('lite');
   if(b) b.textContent = LITE ? '⚡ Lite mode (tap for full)' : '🎬 Full mode (tap for lite)';
 }
 function toggleLite(){ LITE = !LITE; setStream(); tick(true); }
-let FS = false;
+/* fullscreen that works even on old browsers: a plain fixed overlay, no Fullscreen API */
 function fs(){
-  const v = document.getElementById('vid');
-  FS = !FS;
-  if (FS) {
-    document.body.classList.add('fsmode');
-    const root = document.documentElement;
-    if (root.requestFullscreen) root.requestFullscreen().catch(()=>{});
-    try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{}); } catch(e){}
-    v.onclick = () => fs();                       // tap the video to come back
-  } else {
-    document.body.classList.remove('fsmode');
-    if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen().catch(()=>{});
-    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e){}
-    v.onclick = null;
-  }
-  setStream();
+  let o = document.getElementById('fsOverlay');
+  if (o) { o.remove(); setStream(); return; }
+  o = document.createElement('div');
+  o.id = 'fsOverlay';
+  o.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;background:#000;' +
+                    'z-index:2147483647;display:flex;align-items:center;justify-content:center';
+  const im = document.createElement('img');
+  im.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+  im.src = u('/video.mjpg', {fps: 15});
+  o.appendChild(im);
+  o.onclick = () => { o.remove(); setStream(); };
+  document.body.appendChild(o);
+  try { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function(){}); } catch(e){}
+  try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){}); } catch(e){}
 }
-window.addEventListener('resize', () => { if (FS) setStream(); });
-window.addEventListener('orientationchange', () => { if (FS) setTimeout(setStream, 300); });
+
+/* ---- brain audio: hear the connectome fire ---- */
+let AC = null, AUD = false, ANODES = {};
+const AGROUPS = [['vis_L',170],['vis_R',190],['dn_L',330],['dn_R',352],['motor',104],
+                 ['kc',523],['dan',698],['mbon',262],['mecha',440]];
+function audioToggle(){
+  if (!AC) { const C = window.AudioContext || window.webkitAudioContext; if (!C) { alert('no audio'); return; } AC = new C(); }
+  AUD = !AUD;
+  if (AUD) {
+    AC.resume();
+    for (const [g, f] of AGROUPS) {
+      const o = AC.createOscillator(), gn = AC.createGain();
+      o.type = 'sine'; o.frequency.value = f; gn.gain.value = 0;
+      o.connect(gn); gn.connect(AC.destination); o.start();
+      ANODES[g] = {o: o, gn: gn, f: f};
+    }
+  } else {
+    for (const g in ANODES) { try { ANODES[g].o.stop(); } catch(e){} }
+    ANODES = {};
+  }
+  const b = document.getElementById('sndbtn');
+  if (b) b.textContent = AUD ? '🔊 brain sound: ON' : '🔈 hear the brain';
+}
+function audioUpdate(hz){
+  if (!AUD || !AC) return;
+  for (const g in ANODES) {
+    const v = Math.max(0, Math.min(1, (hz[g] || 0) / 120));      // rate -> loudness
+    ANODES[g].gn.gain.setTargetAtTime(v * 0.045, AC.currentTime, 0.12);
+    ANODES[g].o.frequency.setTargetAtTime(ANODES[g].f * (1 + v * 0.35), AC.currentTime, 0.12);
+  }
+}
 function toast(m, ok){
   const t = document.getElementById('toast'); if(!t) return;
   t.textContent = m; t.style.background = ok ? '#1d5c33' : '#5c1d1d'; t.style.opacity = 1;
@@ -471,6 +498,7 @@ function tick(force){
       ['in water',(s.in_water?'yes 🌊':'no')],
       ['bathing / grooming',(s.groom!==undefined?(s.groom*100).toFixed(0)+'%':'-')],
       ['last command',s.last_cmd]];
+    audioUpdate(s.hz);
     document.getElementById('st').innerHTML=rows.map(r=>
       '<div class="row"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('');
     if(!LITE || tickN % 3 === 0)
