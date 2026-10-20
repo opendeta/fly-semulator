@@ -298,6 +298,15 @@ border-bottom:1px solid #1c2434;font-size:clamp(12.5px,3.5vw,13.5px)}
  .wrap{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;align-items:start}
  .card{padding:14px}
 }
+
+/* ---------- fullscreen video mode ---------- */
+body.fsmode { overflow: hidden !important; background: #000 !important; }
+body.fsmode * { visibility: hidden !important; }
+body.fsmode #fsWrap, body.fsmode #fsWrap * { visibility: visible !important; }
+body.fsmode #fsWrap { position: fixed !important; inset: 0 !important; z-index: 99999 !important;
+  display: block !important; background: #000 !important; margin: 0 !important; padding: 0 !important; }
+body.fsmode #vid { width: 100vw !important; height: 100vh !important; max-width: none !important;
+  object-fit: cover !important; border-radius: 0 !important; margin: 0 !important; display: block !important; }
 </style></head><body>
 <h1>🦟 FLY BRAIN LAB<small>MaleCNS connectome · 164,740 neurons · live</small></h1>
 <div class="wrap">
@@ -305,7 +314,7 @@ border-bottom:1px solid #1c2434;font-size:clamp(12.5px,3.5vw,13.5px)}
   <div id="toast" style="position:fixed;left:50%;transform:translateX(-50%);bottom:18px;
    z-index:99;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;
    transition:opacity .25s;background:#1d5c33;color:#fff;max-width:92vw;text-align:center"></div>
-  <img id="vid" class="stream" alt="live fly stream">
+  <div id="fsWrap"><img id="vid" class="stream" alt="live fly stream"></div>
   <button id="lite" onclick="toggleLite()" style="width:100%">⚡ Lite mode</button>
   <button onclick="fs()" style="width:100%;margin-top:4px">⛶ fullscreen video</button>
   <div class="lab">Remote control</div>
@@ -403,20 +412,35 @@ function busy(){                       // never fight the user for CPU while typ
 }
 function setStream(){
   const narrow = window.innerWidth < 760;
+  const landscape = window.innerWidth > window.innerHeight;
   document.getElementById('vid').src = u('/video.mjpg',
-      narrow ? {o: 'portrait', fps: 6} : (LITE ? {fps: 8, small: 1} : {fps: 25}));
-  document.getElementById('vid').style.maxWidth = narrow ? '480px' : '';
+      FS ? (landscape ? {fps: 15} : {o: 'portrait', fps: 10})
+         : (narrow ? {o: 'portrait', fps: 6} : (LITE ? {fps: 8, small: 1} : {fps: 25})));
+  document.getElementById('vid').style.maxWidth = (narrow && !FS) ? '480px' : '';
   const b = document.getElementById('lite');
   if(b) b.textContent = LITE ? '⚡ Lite mode (tap for full)' : '🎬 Full mode (tap for lite)';
 }
 function toggleLite(){ LITE = !LITE; setStream(); tick(true); }
+let FS = false;
 function fs(){
   const v = document.getElementById('vid');
-  if (v.requestFullscreen) { v.requestFullscreen().catch(e=>alert('fullscreen blocked')); }
-  else { v.style.position='fixed'; v.style.inset='0'; v.style.zIndex='9999';
-         v.style.width='100vw'; v.style.maxWidth='none'; v.style.background='#000';
-         v.onclick = () => { v.removeAttribute('style'); v.onclick=null; }; }
+  FS = !FS;
+  if (FS) {
+    document.body.classList.add('fsmode');
+    const root = document.documentElement;
+    if (root.requestFullscreen) root.requestFullscreen().catch(()=>{});
+    try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{}); } catch(e){}
+    v.onclick = () => fs();                       // tap the video to come back
+  } else {
+    document.body.classList.remove('fsmode');
+    if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e){}
+    v.onclick = null;
+  }
+  setStream();
 }
+window.addEventListener('resize', () => { if (FS) setStream(); });
+window.addEventListener('orientationchange', () => { if (FS) setTimeout(setStream, 300); });
 function toast(m, ok){
   const t = document.getElementById('toast'); if(!t) return;
   t.textContent = m; t.style.background = ok ? '#1d5c33' : '#5c1d1d'; t.style.opacity = 1;
