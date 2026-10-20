@@ -82,6 +82,7 @@ steering a body toward light.</p>
      z-index:99;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;
      transition:opacity .25s;background:#1d5c33;color:#fff;max-width:92vw;text-align:center"></div>
     <div class="statusline"><span id="dot" class="dot"></span><span id="status">connecting…</span></div>
+    <button id="lite" onclick="toggleLite()" style="width:100%;margin-top:8px">⚡ Lite mode</button>
     <img id="vid" class="stream" alt="live fly simulation stream" style="margin-top:8px">
     <div class="lab">Remote control <span id="ctrlstate" style="text-transform:none"></span></div>
     <div class="btns">
@@ -155,10 +156,24 @@ steering a body toward light.</p>
 
 <script>
 let BACK = null, CK = localStorage.getItem('flyctrl') || '';
+let LITE = window.innerWidth < 820 ||
+           (navigator.connection && navigator.connection.saveData) ||
+           (navigator.deviceMemory && navigator.deviceMemory <= 4);
 const URLK = new URLSearchParams(location.search).get('k') || '';
 if (URLK) { CK = URLK; localStorage.setItem('flyctrl', CK); }
 const $ = id => document.getElementById(id);
 
+function u(path, extra){                       // backend url + view key + options
+  const p = new URLSearchParams();
+  if(BACK && BACK.view_key) p.set('k', BACK.view_key);
+  if(extra) for(const k in extra) p.set(k, extra[k]);
+  const q = p.toString();
+  return BACK.url + path + (q ? '?' + q : '');
+}
+function busy(){                               // never fight the user for CPU while typing
+  const a = document.activeElement;
+  return document.hidden || (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'));
+}
 function setStatus(on, txt){
   $('dot').className = 'dot' + (on ? ' on' : '');
   $('status').textContent = txt;
@@ -169,6 +184,13 @@ function toast(m, ok){
   t.style.background = ok ? '#1d5c33' : '#5c1d1d'; t.style.opacity = 1;
   clearTimeout(window._tt); window._tt = setTimeout(() => t.style.opacity = 0, 1800);
 }
+function setStream(){
+  if(!BACK) return;
+  $('vid').src = u('/video.mjpg', LITE ? {fps: 8, small: 1} : {fps: 25});
+  $('lite').textContent = LITE ? '⚡ Lite mode (tap for full quality)'
+                               : '🎬 Full quality (tap for lite)';
+}
+function toggleLite(){ LITE = !LITE; setStream(); tick(true); }
 function cmd(c, v, btn){
   if(btn){ btn.style.background = '#3a5285'; setTimeout(() => btn.style.background = '', 260); }
   if(!BACK){ toast('no backend configured', false); return; }
@@ -180,20 +202,12 @@ function cmd(c, v, btn){
   }).then(r => toast(r.ok ? ('✓ ' + c) : ('✗ ' + c + ' — control key rejected'), r.ok))
     .catch(e => toast('✗ backend unreachable', false));
 }
-async function boot(){
-  $('ckey').value = CK;
-  try{ BACK = await (await fetch('backend.json?t=' + Date.now())).json(); }
-  catch(e){ BACK = null; }
-  if(!BACK || !BACK.url){ setStatus(false, 'no backend configured'); return; }
-  const V = encodeURIComponent(BACK.view_key);
-  $('vid').src = BACK.url + '/video.mjpg?k=' + V;
-  $('panel').src = BACK.url + '/brain.png?k=' + V;
-  setStatus(true, 'connecting · ' + BACK.url.replace('https://',''));
-  tick(); setInterval(tick, 1500);
-}
-function tick(){
-  const V = encodeURIComponent(BACK.view_key);
-  fetch(BACK.url + '/api/state?k=' + V).then(r => r.json()).then(s => {
+let tickN = 0;
+function tick(force){
+  if(!BACK) return;
+  if(!force && busy()) return;
+  fetch(u('/api/state')).then(r => r.json()).then(s => {
+    tickN++;
     setStatus(true, 'live · ' + BACK.url.replace('https://',''));
     const rows = [
       ['sim time', Math.round(s.t) + ' s'], ['video', s.fps + ' fps'],
@@ -201,8 +215,8 @@ function tick(){
       ['fly speed', s.speed + ' mm/s'], ['turn rate', s.turn + ' rad/s'],
       ['lights caught', s.caught],
       ['visual L/R', s.hz.vis_L.toFixed(1) + ' / ' + s.hz.vis_R.toFixed(1) + ' Hz'],
-      ['descending L/R', s.hz.dn_L + ' / ' + s.hz.dn_R + ' Hz'],
-      ['motor', s.hz.motor + ' Hz'],
+      ['descending L/R', s.hz.dn_L.toFixed(1) + ' / ' + s.hz.dn_R.toFixed(1) + ' Hz'],
+      ['motor', s.hz.motor.toFixed(1) + ' Hz'],
       ['KC / DAN / MBON', Math.round(s.hz.kc) + ' / ' + Math.round(s.hz.dan) + ' / ' + Math.round(s.hz.mbon) + ' Hz'],
       ['light', (s.light.on ? 'ON' : 'OFF') + ' · auto-drift ' + (s.auto ? 'ON' : 'OFF')],
       ['light pos', 'x ' + s.light.x + '  y ' + s.light.y + '  z ' + s.light.z],
@@ -210,8 +224,20 @@ function tick(){
     ];
     $('st').innerHTML = rows.map(r =>
       '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('');
-    $('panel').src = BACK.url + '/brain.png?k=' + V + '&t=' + Date.now();
+    if(!LITE || tickN % 3 === 0) $('panel').src = u('/brain.png', {t: Date.now()});
   }).catch(e => setStatus(false, 'backend asleep or tunnel restarted'));
+}
+async function boot(){
+  $('ckey').value = CK;
+  try{ BACK = await (await fetch('backend.json?t=' + Date.now())).json(); }
+  catch(e){ BACK = null; }
+  if(!BACK || !BACK.url){ setStatus(false, 'no backend configured'); return; }
+  setStream();
+  $('panel').src = u('/brain.png');
+  setStatus(true, 'connecting · ' + BACK.url.replace('https://',''));
+  tick(true);
+  setInterval(() => tick(false), LITE ? 6000 : 2500);
+  document.addEventListener('visibilitychange', () => { if(!document.hidden) tick(true); });
 }
 boot();
 </script></body></html>

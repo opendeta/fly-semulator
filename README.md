@@ -55,6 +55,8 @@ Weights are the traced synapse counts, normalized per postsynaptic neuron.
 * **Static front-end:** GitHub Pages (`docs/`), permanent.
 * **Live compute backend:** any machine running `scripts/watchdog.py` (keeps the dashboard
   and the tunnel alive and auto-updates `docs/backend.json`).
+* **Free forever option:** `docs/ORACLE_SETUP.md` + `scripts/provision_oracle.sh` —
+  a 4-core/24 GB Oracle Always Free ARM VM, provisioned in one command.
 * **Always-on option:** `hf/` contains a Docker Space (Hugging Face) that runs the whole
   lab on a permanent `*.hf.space` URL, independent of any single machine. Build it by
   creating a Docker Space and copying `hf/Dockerfile` + `hf/README.md` into it.
