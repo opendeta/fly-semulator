@@ -31,6 +31,20 @@ def web_alive():
     except Exception:
         return False
 
+def public_ok(url, tries=1):
+    """Does the tunnel actually serve traffic (not just 'process alive')?"""
+    for _ in range(tries):
+        try:
+            req = urllib.request.Request(url + "/login", headers={"User-Agent": "watchdog"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                if r.status == 200:
+                    return True
+        except Exception:
+            pass
+        time.sleep(3)
+    return False
+
+
 def tunnel_url():
     try:
         txt = (LOGS / "tunnel.log").read_text()[-60000:]
@@ -67,6 +81,7 @@ def publish(url):
     return True
 
 web = tun = None
+fail_streak = 0
 log("watchdog starting")
 while True:
     try:
@@ -88,6 +103,20 @@ while True:
         u = tunnel_url()
         if u:
             publish(u)
+            if public_ok(u):
+                if fail_streak:
+                    log(f"tunnel healthy again ({u})")
+                fail_streak = 0
+            else:
+                fail_streak += 1
+                log(f"tunnel not serving traffic (fail {fail_streak}/2)")
+                if fail_streak >= 2:
+                    log("restarting tunnel")
+                    try: tun.terminate()
+                    except Exception: pass
+                    tun = None
+                    fail_streak = 0
+                    time.sleep(5)
     except Exception as e:
         log(f"watchdog error: {e!r}")
     time.sleep(20)
