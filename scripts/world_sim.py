@@ -125,7 +125,7 @@ class World:
         self.auto_light = False
         self._innate_user = self.innate
         self._brain_gain_user = self.brain_gain
-        self.brain_gain = 0.10
+        self.brain_gain = 0.05
         self.light.update(on=True, z=20.0, x=0.0)
         self.light["y"] = -35.0 * self.cue_side     # cue 90 deg to the side
         self.fly["yaw"] = 0.0
@@ -150,10 +150,11 @@ class World:
         bearing = (np.arctan2(dy, dx) - f["yaw"] + np.pi) % (2 * np.pi) - np.pi
         inten = (1.0 if L["on"] else 0.0) * 60.0 / (60.0 + dist * dist / 12.0)
 
-        if self.mode == "video" and self.video is not None:
+        if self.video is not None and self.mode in ("video", "train"):
             v = self.video
             i = int(self.t * v["fps"]) % len(v["left"])
             dl, dr = float(v["left"][i]), float(v["right"][i])
+            # in training the video IS the visual world: it drives the eyes directly
             self.brain.set_drive({"vis_L": self.baseline + 1.1 * dl,
                                   "vis_R": self.baseline + 1.1 * dr})
         else:
@@ -195,7 +196,7 @@ class World:
             tr["bearing"] = float(bearing)
             oriented = abs(bearing) < 1.0
             if tr["phase"] == "cue":
-                self.innate = 0.5 * getattr(self, "_innate_user", 1.0)   # scaffold
+                self.innate = 1.2 * getattr(self, "_innate_user", 1.0)   # stronger scaffold
                 if oriented:
                     if not tr.get("_was_oriented"):
                         tr["reward_events"] += 1

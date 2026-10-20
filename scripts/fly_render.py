@@ -52,26 +52,67 @@ def render_frame(world, W=854, H=480):
                          fly[1] + p[0]*sa + p[1]*ca,
                          fly[2] + p[2]])
 
-    cam = Cam(to_world([-11.5, 0, 7.0]), to_world([1.0, 0, 2.6]))
+    cam = Cam(to_world([-15.0, 0, 6.8]), to_world([1.5, 0, 2.3]))
     img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img, "RGBA")
 
     # sky
-    top = (11, 16, 38); hor = (38, 49, 79)
+    top = (52, 96, 156); hor = (168, 206, 226)
     for i in range(0, H, 8):
         t = i / H
         c = tuple(int(top[k] + (hor[k]-top[k])*t) for k in range(3))
         d.rectangle([0, i, W, i+8], fill=c)
 
-    # ground
-    G = 160
-    gx, gy, gz = cam.project([[-G,-G,0],[G,-G,0],[G,G,0],[-G,G,0]], W, H)
-    d.polygon(list(zip(gx, gy)), fill=(23, 29, 48))
-    for q in range(-G, G+1, 20):
-        x1,y1,_ = cam.project([[q,-G,0],[q,G,0]], W, H)
-        d.line([x1[0],y1[0],x1[1],y1[1]], fill=(43, 53, 82), width=1)
-        x2,y2,_ = cam.project([[-G,q,0],[G,q,0]], W, H)
-        d.line([x2[0],y2[0],x2[1],y2[1]], fill=(43, 53, 82), width=1)
+    # ---------------- meadow: grass field with tufts, flowers and haze ----------
+    # horizon = where the ground plane meets infinity along the view direction
+    far_pt = cam.project([[f["x"] + 600 * cam.fwd[0], f["y"] + 600 * cam.fwd[1], 0.0]], W, H)
+    hz_y = float(far_pt[1][0])
+    hz_y = max(0.0, min(hz_y, float(H) - 1))
+    for i in range(int(hz_y), H, 4):                 # green ground, lighter far away
+        t = (i - hz_y) / max(H - hz_y, 1)
+        c = (int(118 + 22 * (1 - t)), int(156 + 26 * (1 - t)), int(74 + 18 * (1 - t)))
+        d.rectangle([0, i, W, i + 4], fill=c)
+    d.rectangle([0, int(hz_y) - 14, W, int(hz_y) + 2], fill=(196, 216, 200))  # haze band
+
+    def h2(x, y, k):
+        n = (int(x * 73856093) ^ int(y * 19349663) ^ k) & 0xFFFFFFFF
+        n = (n * 2654435761) & 0xFFFFFFFF
+        return (n % 10000) / 10000.0
+
+    fx, fy = f["x"], f["y"]
+    step = 1.7
+    i0, i1 = int((fx - 24) // step), int((fx + 24) // step)
+    j0, j1 = int((fy - 24) // step), int((fy + 24) // step)
+    tufts = []
+    for i in range(i0, i1 + 1):
+        for j in range(j0, j1 + 1):
+            wx = i * step + (h2(i, j, 1) - 0.5) * step
+            wy = j * step + (h2(i, j, 2) - 0.5) * step
+            dist = ((wx - fx) ** 2 + (wy - fy) ** 2) ** 0.5
+            if dist > 24:
+                continue
+            tufts.append((dist, wx, wy, h2(i, j, 3), h2(i, j, 4)))
+    tufts.sort(key=lambda t: -t[0])
+    for dist, wx, wy, r1, r2 in tufts:
+        haze = min(1.0, dist / 24.0)
+        col = (int(66 + 74 * (1 - haze)), int(104 + 78 * (1 - haze)), int(44 + 40 * (1 - haze)), 255)
+        hgt = 0.55 + 1.5 * r1
+        lean = (r2 - 0.5) * 0.9
+        _seg(d, cam, [wx, wy, 0.0], [wx + lean, wy + lean * 0.5, hgt], 0.11, col, W, H)
+        if r2 > 0.4:
+            _seg(d, cam, [wx, wy, 0.0], [wx - lean * 0.8, wy + lean * 0.7, hgt * 0.75], 0.1, col, W, H)
+        if r1 > 0.955:                                # occasional flower
+            fc = (236, 110, 140) if r2 > 0.5 else (250, 220, 96)
+            _sphere(d, cam, [wx + lean, wy + lean * 0.5, hgt + 0.2], 0.3, fc + (255,), W, H)
+
+    # a few taller clusters as landmarks
+    for k in range(3):
+        ax = fx + 11 * np.cos(k * 2.1 + 0.7)
+        ay = fy + 11 * np.sin(k * 2.1 + 0.7)
+        for b in range(6):
+            lean = (b - 2.5) * 0.28
+            _seg(d, cam, [ax, ay, 0.0], [ax + lean, ay + lean * 0.3, 2.6 + b * 0.22],
+                 0.13, (108, 148, 66, 255), W, H)
 
     # light source glow
     L = world.light

@@ -36,6 +36,7 @@ world = World()
 world.start_brain_thread()
 state = {"frame": None, "frame_small": None, "panel": None, "curve": None, "fps": 0.0}
 UPLOADS = os.environ.get("FLY_UPLOADS", "uploads")
+VID_DIR = os.environ.get("FLY_VIDEOS", "/workspace/fly/videos/drives")
 os.makedirs(UPLOADS, exist_ok=True)
 
 
@@ -180,6 +181,33 @@ def upload():
     return jsonify(ok=True, meta=meta)
 
 
+@app.route("/api/videos")
+def api_videos():
+    import glob, os as _os
+    names = sorted(_os.path.basename(f)[:-4] for f in glob.glob(_os.path.join(VID_DIR, "*.npz")))
+    return jsonify(videos=names, current=(world.video or {}).get("name"))
+
+
+@app.route("/api/playvideo", methods=["POST"])
+def api_playvideo():
+    import os as _os
+    import numpy as _np
+    j = request.get_json(force=True, silent=True) or {}
+    name = str(j.get("name", ""))
+    path = _os.path.join(VID_DIR, name + ".npz")
+    if not _os.path.exists(path):
+        return jsonify(ok=False, error="no such video"), 404
+    z = _np.load(path)
+    world.video = dict(left=z["left"], right=z["right"], motion=z["motion"],
+                       fps=float(z["fps"]), name=name)
+    world.cue_side = int(z["cue"])
+    world.stop_training()
+    world.mode = "video"
+    world.auto_light = False
+    return jsonify(ok=True, name=name, cue=("right" if world.cue_side > 0 else "left"),
+                   frames=int(len(z["left"])), fps=float(z["fps"]))
+
+
 @app.route("/api/train", methods=["POST"])
 def api_train():
     j = request.get_json(force=True, silent=True) or {}
@@ -306,6 +334,15 @@ border-bottom:1px solid #1c2434;font-size:clamp(12.5px,3.5vw,13.5px)}
   <div class="knob"><input type="file" id="vidfile" accept="video/*" style="width:100%;font-size:13px">
    <button style="width:100%;margin-top:8px" onclick="doUpload()">⬆ Upload video</button></div>
   <div id="vinfo" style="font-size:12.5px;color:#8fa3c2;margin:4px 0"></div>
+  <div class="lab">🌐 internet videos (public domain / CC)</div>
+  <div class="knob"><select id="vidsel" style="width:100%;padding:9px;border-radius:8px;
+     border:1px solid #35476e;background:#0f1524;color:#fff"></select>
+   <div class="btns" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-top:6px">
+     <button onclick="playVideo()">▶ play video</button>
+     <button onclick="loadVideos()">↻ list</button>
+   </div>
+   <div id="vinfo2" style="font-size:12.5px;color:#8fa3c2;margin-top:4px"></div>
+  </div>
   <div class="lab">Training session</div>
   <div class="btns" style="grid-template-columns:repeat(2,minmax(0,1fr))">
    <button onclick="train('start')">▶ TRAIN</button>
@@ -381,6 +418,18 @@ function tick(force){
       document.getElementById('panel').src = u('/brain.png', {t: Date.now()});
   }).catch(e => {});
 }
+function loadVideos(){
+ fetch(u('/api/videos')).then(r=>r.json()).then(j=>{
+   const sel=document.getElementById('vidsel');
+   sel.innerHTML = j.videos.map(v=>'<option'+(v===j.current?' selected':'')+'>'+v+'</option>').join('');
+ }).catch(e=>{})}
+function playVideo(){
+ const n=document.getElementById('vidsel').value;
+ fetch(u('/api/playvideo'),{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({name:n})}).then(r=>r.json()).then(j=>{
+   document.getElementById('vinfo2').textContent = j.ok
+     ? ('✓ '+j.name+' · '+j.frames+' frames · cue on the '+j.cue+' — the fly is watching it now')
+     : ('✗ '+j.error)}).catch(e=>{})}
 function doUpload(){
  const f=document.getElementById('vidfile').files[0];
  if(!f){alert('choose a video file first');return}
@@ -412,6 +461,7 @@ function refreshTrain(){
    '<div class="row"><span>trial '+r.trial+'</span><b>'+r.oriented+'% oriented</b></div>').join('') : '';
   document.getElementById('curve').src=u('/api/curve.png',{t:Date.now()})})}
 setStream();
+loadVideos();
 tick(); setInterval(tick, LITE ? 6000 : 2500);
 setInterval(refreshTrain, LITE ? 9000 : 4000);
 refreshTrain();

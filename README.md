@@ -121,6 +121,33 @@ that check and writes screenshots.
 | `scripts/bench_loop.py` | loop benchmark (fps, brain real-time factor) |
 | `scripts/mobile_check.py` | Playwright responsive check + mobile screenshots |
 
+## The meadow
+
+The body now moves through a procedurally drawn grass field: tufts, flowers and
+landmark clusters placed from a world-space hash (so they scroll correctly as the fly
+walks), a haze band at the true ground horizon, and a daylight sky. Rendering cost is
+~16-23 ms/frame on 4 vCPUs.
+
+## Internet videos
+
+`scripts/fetch_videos.py` downloads five public-domain / CC-BY-SA clips from Wikimedia
+Commons (moon, bees, moonrise…). `video_input.py` turns each clip into what the fly's
+compound eyes would see, and in training **those frames are the fly's visual world** —
+the brighter side of the frame becomes the sugar-rewarded cue. Learning is measured as
+the fraction of each test phase the fly spends oriented to that side:
+
+| video | cue | first trials | last trials | KC→MBON drift |
+|---|---|---|---|---|
+| bee | left | 0 % | **83 %** | 1.036 |
+| moonrise | left | 34 % | **90 %** | 1.040 |
+| bumblebees | left | 46 % | **86 %** | 1.041 |
+| morningglory | right | 0 % | 24 % | 1.031 |
+| moon | left | 55 % | mixed (0–90 %) | 1.040 |
+
+The failure mode is honest and visible: when the fly never happens to orient during the
+cue phase it receives no reward, so nothing is learned (bumblebees before the scaffold
+fix: 0 % throughout, weight drift exactly 1.000).
+
 ## Associative learning (video in, behaviour out)
 
 `scripts/video_input.py` turns an uploaded clip into what the fly's compound eyes would
