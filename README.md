@@ -128,6 +128,16 @@ landmark clusters placed from a world-space hash (so they scroll correctly as th
 walks), a haze band at the true ground horizon, and a daylight sky. Rendering cost is
 ~16-23 ms/frame on 4 vCPUs.
 
+## The pond: water seeking and bathing (real fly behaviour)
+
+A pond sits in the field. Flies seek water (hygrotaxis) and groom/bathe in it — and the
+antennal-grooming circuit is exactly what Shiu et al. (Nature 2024) mapped. Here the fly
+steers toward the pond with a water-seeking drive, wades in, and switches to a grooming
+motor pattern: the front legs reach up and rub the head/antennae while ripples spread on
+the surface. Water controls (`🐟 pond & bathing`) expose the drive strength and the pond
+position; the state panel shows distance to the pond, whether it is in the water, and the
+grooming level.
+
 ## Internet videos
 
 `scripts/fetch_videos.py` downloads five public-domain / CC-BY-SA clips from Wikimedia

@@ -320,6 +320,18 @@ border-bottom:1px solid #1c2434;font-size:clamp(12.5px,3.5vw,13.5px)}
    <button onclick="cmd('pause',null,this)">⏯ pause</button>
    <button onclick="cmd('reset',null,this)">↺ reset</button>
   </div>
+  <div class="lab">🐟 pond &amp; bathing</div>
+  <div class="knob"><label>water seeking <span id="vw">1.0</span></label>
+   <input type="range" min="0" max="3" step="0.1" value="1"
+    oninput="document.getElementById('vw').textContent=(+this.value).toFixed(1)"
+    onchange="cmd('water',this.value)"></div>
+  <div class="knob"><label>pond position</label>
+   <input type="range" min="0" max="6.28" step="0.05" value="5.5"
+    onchange="cmd('pond',this.value)"></div>
+  <div class="btns" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+   <button onclick="cmd('water',0,null,this)">🚫 stop seeking</button>
+   <button onclick="cmd('water',3,null,this)">🐟 go bathe</button>
+  </div>
   <div class="lab">Knobs</div>
   <div class="knob"><label>innate phototaxis <span id="v1">1.0</span></label>
    <input type="range" min="0" max="3" step="0.1" value="1"
@@ -410,7 +422,7 @@ function toast(m, ok){
   t.textContent = m; t.style.background = ok ? '#1d5c33' : '#5c1d1d'; t.style.opacity = 1;
   clearTimeout(window._tt); window._tt = setTimeout(() => t.style.opacity = 0, 1800);
 }
-function cmd(c, v, btn){
+function cmd(c, v, btn, _x){
   if(btn){ btn.style.background = '#3a5285'; setTimeout(() => btn.style.background = '', 260); }
   fetch(u('/api/cmd'), {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({cmd:c, val: v===undefined?null:parseFloat(v)})})
@@ -431,6 +443,9 @@ function tick(force){
       ['KC / DAN / MBON',Math.round(s.hz.kc)+' / '+Math.round(s.hz.dan)+' / '+Math.round(s.hz.mbon)+' Hz'],
       ['light',(s.light.on?'ON':'OFF')+' · auto-drift '+(s.auto?'ON':'OFF')],
       ['light pos','x '+s.light.x+'  y '+s.light.y+'  z '+s.light.z],
+      ['pond dist',(s.pdist!==undefined?s.pdist+' mm':'-')],
+      ['in water',(s.in_water?'yes 🌊':'no')],
+      ['bathing / grooming',(s.groom!==undefined?(s.groom*100).toFixed(0)+'%':'-')],
       ['last command',s.last_cmd]];
     document.getElementById('st').innerHTML=rows.map(r=>
       '<div class="row"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('');

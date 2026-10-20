@@ -23,7 +23,8 @@ class World:
         self.brain = Brain(data_dir=self.data_dir, dt=dt)
         self.dt = dt
         self.t = 0.0
-        self.fly = dict(x=0.0, y=0.0, z=3.5, yaw=0.0, speed=0.0, flap=0.0, phase=0.0)
+        self.fly = dict(x=0.0, y=0.0, z=3.5, yaw=0.0, speed=0.0, flap=0.0, phase=0.0,
+                        groom=0.0, in_water=0.0)
         self.light = dict(x=30.0, y=12.0, z=25.0, on=True)
         self.auto_light = True
         self.paused = False
@@ -43,6 +44,9 @@ class World:
         self._thread = None
 
         self.baseline = 0.55          # ambient light: keeps the circuit alive
+        # a pond in the field: real flies seek water (hygrotaxis) and groom in it
+        self.pond = dict(x=15.0, y=-9.0, r=5.0)
+        self.water_seek = 1.0
         self.mode = "light"
         self.video = None
         self.cue_side = 1                     # +1 cue on the right, -1 on the left
@@ -94,6 +98,10 @@ class World:
         elif c == "innate" and val is not None:     self.innate = float(val)
         elif c == "brain_gain" and val is not None: self.brain_gain = float(val)
         elif c == "speed" and val is not None:      self.speed_scale = float(val)
+        elif c == "water" and val is not None:      self.water_seek = float(val)
+        elif c == "pond" and val is not None:
+            self.pond["x"] = 26.0 * np.cos(float(val))
+            self.pond["y"] = 26.0 * np.sin(float(val))
         elif c == "mode_light":
             self.mode = "light"; self.stop_training()
         elif c == "mode_video" and self.video is not None:
@@ -163,6 +171,16 @@ class World:
             self.brain.set_drive({"vis_L": self.baseline + 1.1 * dl,
                                   "vis_R": self.baseline + 1.1 * dr})
 
+        # --- water seeking (hygrotaxis) toward the pond ---
+        pdx, pdy = self.pond["x"] - f["x"], self.pond["y"] - f["y"]
+        pdist = float(np.hypot(pdx, pdy)) + 1e-6
+        pbearing = (np.arctan2(pdy, pdx) - f["yaw"] + np.pi) % (2 * np.pi) - np.pi
+        near = 1.0 if pdist < 26.0 else 0.0
+        in_water = pdist < self.pond["r"] * 0.85
+        f["in_water"] = 1.0 if in_water else 0.0
+        # bathing: grooming builds up in the water, fades on land
+        f["groom"] = float(np.clip(f["groom"] + (0.7 if in_water else -0.45) * wall_dt, 0.0, 1.0))
+
         # --- readout: descending + motor (+ learned MBON bias) ---
         dnL, dnR = self.brain.hz("dn_L"), self.brain.hz("dn_R")
         mot = self.brain.hz("motor")
@@ -175,9 +193,15 @@ class World:
             bias = float(np.tanh((self.learner.learned_approach() / self.dt) / 40.0))
         turn = (self.innate * np.sin(bearing)
                 + self.brain_gain * np.tanh((dnR - dnL) / 15.0)
-                + self.learn_gain * bias * np.sin(bearing))
+                + self.learn_gain * bias * np.sin(bearing)
+                + self.water_seek * 1.6 * near * np.sin(pbearing)
+                + (1.4 * np.sin(pbearing) if (pdist < 8 and not in_water) else 0.0))
         f["yaw"] = (f["yaw"] + turn * wall_dt * 1.6) % (2 * np.pi)
         spd = (6.0 + 3.0 * np.tanh(mot / 12.0)) * self.speed_scale
+        if pdist < self.pond["r"] * 1.6:      # ease into the water instead of overshooting
+            spd *= max(0.04, min(1.0, (pdist - self.pond["r"] * 0.35) / (self.pond["r"] * 1.1)))
+        if in_water:
+            spd *= 0.5                        # wading
         f["speed"] = spd
         if self.mode == "train":
             f["x"] = f["y"] = 0.0        # tethered: measure orientation only
@@ -262,6 +286,9 @@ class World:
             hz={k: round(v, 2) for k, v in p.items()},
             innate=self.innate, brain_gain=self.brain_gain,
             cue_side=self.cue_side,
+            pond=dict(x=self.pond["x"], y=self.pond["y"], r=self.pond["r"]),
+            pdist=round(pdist, 1), in_water=bool(in_water), groom=round(f["groom"], 2),
+            water_seek=self.water_seek,
             approach=round(bias, 3), approach_hz=round(float(self.learner.learned_approach() / self.dt), 1) if self.learner else 0.0,
             video=(self.video["name"] if self.video else None),
             train=dict(active=tr["active"], done=tr["done"], trial=tr["trial"],

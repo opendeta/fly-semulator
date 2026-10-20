@@ -110,6 +110,31 @@ def render_frame(world, W=854, H=480, portrait=False):
         for dx, dy, dz, r in [(-0.9, 0.2, 3.6, 1.5), (0.9, -0.2, 3.7, 1.4), (0.0, 0.0, 4.7, 1.6)]:
             _sphere(d, cam, [wx + dx * sc, wy + dy * sc, (dz + 0.9) * sc], r * sc, leaf + (255,), W, H)
 
+    # ---------------- the pond (water on the ground) ----------------
+    pd = (world.stats or {}).get("pond") or dict(x=15.0, y=-9.0, r=5.0)
+    pr = float(pd.get("r", 3.2))
+    ring = [[pd["x"] + pr * np.cos(a), pd["y"] + pr * np.sin(a), 0.03]
+            for a in np.linspace(0, 2 * np.pi, 14, endpoint=False)]
+    xs, ys, _ = cam.project(ring, W, H)
+    x0, x1, y0, y1 = float(xs.min()), float(xs.max()), float(ys.min()), float(ys.max())
+    d.ellipse([x0 - 4, y0 - 3, x1 + 4, y1 + 3], fill=(150, 168, 150))       # muddy bank
+    d.ellipse([x0, y0, x1, y1], fill=(78, 132, 186))                        # water
+    # a lighter band in the middle so it reads as water
+    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+    d.ellipse([x0 + (mx - x0) * 0.35, y0 + (my - y0) * 0.35,
+               x1 - (x1 - mx) * 0.35, y1 - (y1 - my) * 0.35], fill=(96, 152, 202))
+    # ripples: always a couple, more when the fly is bathing
+    gw = float(f.get("groom", 0.0))
+    if gw > 0.05 or f.get("in_water", 0) > 0:
+        for k in range(3):
+            ph = (world.t * (1.1 + 0.4 * k)) % 1.0
+            rr = (0.35 + 0.65 * ph) * pr * 1.25
+            r2 = [[f["x"] + rr * np.cos(a), f["y"] + rr * np.sin(a), 0.04]
+                  for a in np.linspace(0, 2 * np.pi, 14, endpoint=False)]
+            rx2, ry2, _ = cam.project(r2, W, H)
+            d.ellipse([rx2.min(), ry2.min(), rx2.max(), ry2.max()],
+                      outline=(210, 232, 245), width=max(1, int(2 - 1.5 * ph)))
+
     # light source glow
     L = world.light
     if L["on"]:
@@ -128,8 +153,18 @@ def render_frame(world, W=854, H=480, portrait=False):
     leg_ph = [0, np.pi, 0, np.pi, 0, np.pi]
     leg_sp = [1, -1, 1, -1, 1, -1]
     leg_root = [(1.6, 1.5), (0.0, 1.8), (-1.6, 1.5), (1.6, -1.5), (0.0, -1.8), (-1.6, -1.5)]
+    groom = float(f.get("groom", 0.0))
     for i, (rx, ry) in enumerate(leg_root):
         side = 1 if ry > 0 else -1
+        if groom > 0.3 and i < 2:                     # front legs groom the head
+            rub = np.sin(world.t * 30.0 + i * np.pi)
+            foot = to_world([3.5 + 0.55 * rub, side * (0.95 + 0.35 * rub),
+                             -f["z"] + 2.35 + 0.45 * rub])
+            knee = to_world([2.3, side * 1.15, -0.15])
+            root = to_world([rx, ry, -0.1])
+            _seg(d, cam, root, knee, 0.42, (74, 51, 36, 255), W, H)
+            _seg(d, cam, knee, foot, 0.34, (74, 51, 36, 255), W, H)
+            continue
         ph = f["phase"] + leg_ph[i]
         sw = 1.8 * np.sin(ph) * leg_sp[i]
         lift = max(0.0, np.sin(ph)) * 1.6
@@ -164,6 +199,11 @@ def render_frame(world, W=854, H=480, portrait=False):
         a1 = to_world([5.6, side * 1.1, 3.0])
         _seg(d, cam, a0, a1, 0.16, (90, 62, 40, 255), W, H)
 
+    # ---- water over the fly's legs: it is standing IN the pond ----
+    if (world.stats or {}).get("pdist", 99) < pr * 1.5:
+        d.ellipse([x0, y0, x1, y1], fill=(72, 138, 198, 82))
+        d.ellipse([x0, y0, x1, y1], outline=(198, 226, 240, 190), width=2)
+
     # HUD
     st = world.stats or {}
     hz = st.get("hz", {})
@@ -171,6 +211,8 @@ def render_frame(world, W=854, H=480, portrait=False):
         lines = [
             "FLY BRAIN LAB · live",
             f"t={st.get('t',0)}s  {st.get('speed',0)} mm/s  d={st.get('dist',0)} mm",
+            ("BATHING · grooming" if st.get('groom', 0) > 0.3 else
+             (f"pond {st.get('pdist',0)} mm" if st.get('pdist') is not None else "field")),
             f"VIS {hz.get('vis_L',0)}/{hz.get('vis_R',0)}  DN {hz.get('dn_L',0)}/{hz.get('dn_R',0)}  M {hz.get('motor',0)}",
         ]
     else:
