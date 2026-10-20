@@ -22,6 +22,21 @@ for side in ("L", "R"):
 
 rig = R.load_rig()
 T = R.world_transforms(rig)
+# spread the wings outward/back like the reference figure
+import numpy as _np
+def _rot(axis, deg):
+    a = _np.radians(deg); c, sn = _np.cos(a), _np.sin(a)
+    if axis == "z":
+        return _np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]], _np.float32)
+    if axis == "y":
+        return _np.array([[c, 0, sn], [0, 1, 0], [-sn, 0, c]], _np.float32)
+    return _np.array([[1, 0, 0], [0, c, -sn], [0, sn, c]], _np.float32)
+WING_SPREAD = True
+for nm in list(T):
+    if nm.endswith("_wing"):
+        side = 1.0 if nm[0] == "l" else -1.0
+        Rw, tw = T[nm]
+        T[nm] = (_rot("z", 26.0 * side) @ _rot("y", 30.0) @ _rot("x", -12.0) @ Rw, tw)
 verts, faces = [], []
 off = 0
 used = 0

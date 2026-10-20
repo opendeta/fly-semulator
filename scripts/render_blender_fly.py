@@ -41,15 +41,15 @@ def S(name, val, alt=None):
             try: bsdf.inputs[n].default_value = val; return True
             except Exception: pass
     return False
-S("Base Color", (0.04, 0.42, 1.0, 1.0))
+S("Base Color", (0.03, 0.34, 0.95, 1.0))
 S("Roughness", 0.22)
 S("IOR", 1.45)
-S("Transmission Weight", 0.30, "Transmission")
+S("Transmission Weight", 0.22, "Transmission")
 S("Subsurface Weight", 0.22, "Subsurface")
 if "Subsurface Radius" in bsdf.inputs:
     bsdf.inputs["Subsurface Radius"].default_value = (0.00035, 0.0006, 0.0010)
 S("Emission Color", (0.06, 0.45, 1.0, 1.0))
-S("Emission Strength", 0.35)
+S("Emission Strength", 0.75)
 S("Coat Weight", 0.35, "Clearcoat")
 fly.data.materials.clear(); fly.data.materials.append(mat)
 
