@@ -50,6 +50,16 @@ Weights are the traced synapse counts, normalized per postsynaptic neuron.
 | video loop | ~25 fps @ 854×480 |
 | brain clock | 0.3–0.6× real-time (4 vCPU, no GPU) |
 
+## Hosting
+
+* **Static front-end:** GitHub Pages (`docs/`), permanent.
+* **Live compute backend:** any machine running `scripts/watchdog.py` (keeps the dashboard
+  and the tunnel alive and auto-updates `docs/backend.json`).
+* **Always-on option:** `hf/` contains a Docker Space (Hugging Face) that runs the whole
+  lab on a permanent `*.hf.space` URL, independent of any single machine. Build it by
+  creating a Docker Space and copying `hf/Dockerfile` + `hf/README.md` into it.
+  `.github/workflows/keepalive.yml` pings it so the free tier does not sleep after 48 h.
+
 ## Live demo
 
 * **Site (static, GitHub Pages):** https://opendeta.github.io/fly-semulator/
